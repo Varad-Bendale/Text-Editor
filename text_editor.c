@@ -1,0 +1,67 @@
+#include<stdio.h>
+#include<unistd.h> 
+#include<termios.h>
+#include<ctype.h>
+#include<stdlib.h>
+#include<errno.h>
+#define ctrl(k) ((k) & 0x1f) 
+struct termios original  ; 
+
+
+void die(const char *s) { 
+   perror( s ) ; 
+   exit(1) ; 
+} 
+
+void disable_raw_mode(){
+	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &original) == -1){
+  	  die("tcsetattr");
+	}
+}
+
+void rawmode(){
+    if (tcgetattr(STDIN_FILENO, &original) == -1){
+       die("tcgetattr");
+    } 
+    struct termios temp = original ; 
+    temp.c_iflag &= ~(IXON | ICRNL ) ; 
+    temp.c_oflag &= ~(OPOST ) ; 
+    temp.c_lflag &= ~(IEXTEN|ECHO|ICANON|ISIG ) ; 
+    temp.c_cc[VMIN] = 0 ; 
+    temp.c_cc[VTIME] = 1 ; 
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH , &temp) == -1){
+       die("tcsetattr");
+    } 
+    if (atexit(disable_raw_mode) != 0 ){
+       die("atexit");
+    } 
+}
+
+char raw_key_press(){
+     int temp ; 
+	char c = '\0' ; 
+     while((temp = read(STDIN_FILENO, &c, 1) != 1 )   {
+	if (temp == -1 && errno != EAGAIN){
+       die("read");
+    } 
+    }
+    return c  ; 
+}
+
+void process_raw_key_press(){
+	char word  = raw_key_press() ; 
+	if (word == ctrl('q')){
+	   exit(0)  ; 
+        return ; 
+     } 
+
+} 
+
+int main(){
+    rawmode() ; 
+    while(1) {
+    process_raw_key_press() ; 
+    }
+    return 0 ; 
+} 
+
