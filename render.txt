@@ -1,7 +1,0 @@
-In the raw mode we removed each and every function already so now we now completely define all the functions from core again specifically for the text editor 
-First we defined the ctrl key see here we have some number and then we do the & with the 0x1f which just indicates that that the ctrl button is clicked or that flags are edited that way like we got the ascii characters for  all the commands and then here we want it to be like 
-Now here we are defining the ctrl key cause see we don't want to write the ascii key / number again and again so we just defined it liek this so that if we just put it in the k & 0xf1 we directly get the ascii number simple. 
-Lets begin with ending the function with ctrl + q 
-Okay now we are making the new function for reading all the terms why cause  see in the very first it was not waiting for the alphabets to be written it was continuously  throwing the 0 now it waits for the user to enter the term first also we made these functions cause we have some new functions needed to be added and its just better easier and less of a mess to handle . 
-Now listen this is where we kind of split ways with kilo 
-Kilo render system is like you type something all the characters are given to the terminal and then terminal creates 1 huge thing or render and then give it to the user where as in today current optimised text editors use the difference systems like you look in the coordinates of the stuff and then whatever is changed only those needs to be changed the rest remains the same 
