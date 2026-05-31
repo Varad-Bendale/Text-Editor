@@ -32,7 +32,10 @@ enum settings_keys {
     Arrow_up ,
     Arrow_down ,  
     Page_up , 
-    Page_down
+    Page_down , 
+    Home_key , 
+    End_key  , 
+    delete 
 } ;
 
 
@@ -113,8 +116,13 @@ int raw_key_press(){
 	           } 
 		   if ( buf[2] == '~') { 
  		      switch( buf[1] ) { 
+			case '1' : return Home_key;
+           	       case '4' : return End_key;
 			case '5' : return Page_up ; 
-			case '6' : return Page_down ; 		
+			case '6' : return Page_down ; 	
+			case '7' : return Home_key;
+           	       case '8' : return End_key;
+			case '3' : return delete  ; 
                    } 
 		   } 
                   }
@@ -124,8 +132,17 @@ int raw_key_press(){
 	        	case 'B' : return Arrow_down ; 
 		       case 'C' : return  Arrow_right ; 
 		       case 'D' : return Arrow_left ; 
+			case 'H' : return Home_key;
+           	       case 'F' : return End_key;
 		    }
-		} 
+		}
+		if ( buf[0] == 'O') { 
+		  switch ( buf[1] ) {
+			case 'H' : return Home_key;
+           	       case 'F' : return End_key;
+
+                 } 
+			
        } 
 	return '\x1b'  ; 
     }
@@ -187,6 +204,10 @@ void process_raw_key_press(){
 			times-- ; 
 		}
 	   } 
+	  case Home_key : 
+		edit.cols = 0  ; 
+          case End_key : 
+		edit.cursor_cols = edit.cols - 1 ; 
 	  case Arrow_up : 
 	  case Arrow_down : 
 	  case Arrow_left : 

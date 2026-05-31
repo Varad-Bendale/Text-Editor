@@ -67,4 +67,9 @@ We do the snprintf which is the same it takes all the thing and then put it in t
 "\x1b[%d;%dH" , edit.cursor_rows + 1  , edit.cursor_cols + 1 
 Takes rows. Takes columns and then put it in the escape sequence and then print it 
 
+Okay next are the new buttons or options like now there is this page up and the page down stuff we aint doing anything now but just adjusting the cursor rows and cursor columns thats it nothing else 
+
+2 new ones which are the home key and the end key home key means it points the start of the line and the end key points the end of the line thats it we do the same thing in our part 
+And we just define the delta but don't do anything of it for now 
+
 
