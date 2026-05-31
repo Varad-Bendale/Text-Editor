@@ -10,6 +10,8 @@
 #define version "0.0.1"
 
 struct editor_global { 
+	int cursor_rows ; 
+	int cursor_cols ; 
 	int rows  ; 
 	int cols ; 
 	struct termios original  ; 
@@ -21,6 +23,14 @@ struct dynamic_buffer{
  	char *data ; 
 	int size ; 
 } ;
+
+enum settings_keys {
+    Arrow_left = 1000 ,
+    Arrow_right ,
+    Arrow_up ,
+    Arrow_down 
+} ;
+
 
 #define dynamic_buffer_starter { NULL , 0 } 
 
@@ -72,27 +82,90 @@ void rawmode(){
     } 
 }
 
-char raw_key_press(){
+int raw_key_press(){
      int temp ; 
 	char c = '\0' ; 
-     while((temp = read(STDIN_FILENO, &c, 1) != 1 ))   {
+
+     while((temp = read(STDIN_FILENO, &c, 1)) != 1 )   {
 	if (temp == -1 && errno != EAGAIN){
        die("read");
     } 
     }
-    return c  ; 
+
+    if ( c == '\x1b') { 
+		char buf[3] ; 
+	   if ( read(STDIN_FILENO , &buf[0] , 1) != 1) { 
+		return '\x1b' ; 
+	      } 
+	   if ( read(STDIN_FILENO , &buf[1] , 1) != 1) { 
+		return '\x1b' ; 
+	     } 
+	if ( buf[0] == '[' ) { 
+ 	  switch ( buf[1] ) {
+		case 'A' : return  Arrow_up ; 
+		case 'B' : return Arrow_down ; 
+		case 'C' : return  Arrow_right ; 
+		case 'D' : return Arrow_left ; 
+		}
+       } 
+	return '\x1b'  ; 
+    }
+    else { 
+	return c ; 
+    } 
+    
+
 }
 
+
+
+
+
+void cursor_change(int c ){ 
+	switch (c)  {
+	  case Arrow_up : 
+		if( edit.cursor_rows  != 0 ) { 
+		   edit.cursor_rows -= 1  ; 
+		} 
+		   break ; 
+	  case Arrow_down : 
+		if (edit.cursor_rows != edit.rows - 1) {
+		  edit.cursor_rows += 1 ; 
+		} 
+		   break ; 
+	 case Arrow_left : 
+		if( edit.cursor_cols  != 0 ) { 
+		   edit.cursor_cols -= 1  ;  
+		} 
+		   break ; 
+	case Arrow_right : 
+		if (edit.cursor_cols != edit.cols - 1) {
+		  edit.cursor_cols += 1  ; 
+		}		
+		   break ; 
+} 
+} 
+
+
 void process_raw_key_press(){
-	char word  = raw_key_press() ; 
-	if (word == ctrl('q')){
-          write(STDOUT_FILENO , "\x1b[2J" , 4 ) ; 
-	   write(STDOUT_FILENO , "\x1b[H" , 3 ) ; 
-	   exit(0)  ; 
-        return ; 
-     } 
+	int word  = raw_key_press() ; 
+	switch (word) {
+	  case ctrl('q') : 
+ 		write(STDOUT_FILENO , "\x1b[2J" , 4 ) ; 
+	       write(STDOUT_FILENO , "\x1b[H" , 3 ) ; 
+	       exit(0)  ; 
+              break ; 
+	  case Arrow_up : 
+	  case Arrow_down : 
+	  case Arrow_left : 
+	  case Arrow_right : 
+		 cursor_change(word) ; 
+		break ; 
+	} 
 
 } 
+
+
 
 void tlides(struct dynamic_buffer *temp  ){ 
 	char welcome[100] ; 
@@ -123,34 +196,16 @@ void tlides(struct dynamic_buffer *temp  ){
 }
 }
 
-void normal_tlides(struct dynamic_buffer *temp) { 
-      for(int i = 0 ; i < edit.rows ; i++){ 
-              dynamic_buffer_append(temp, "~" , 1) ; 
-              dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
-         if( i<edit.rows-1) {
-              dynamic_buffer_append(temp, "\r\n", 2) ; 
-         }
-}
-}
 
 void screen_ready(){
         struct  dynamic_buffer temp = dynamic_buffer_starter ; 
 	dynamic_buffer_append(&temp, "\x1b[?25l" , 6 ) ; 
 	dynamic_buffer_append(&temp, "\x1b[H" , 3) ; 
 	tlides( &temp ) ; 
+        char buf[32] ; 
+	snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , edit.cursor_rows + 1  , edit.cursor_cols + 1 ) ; 
+       	dynamic_buffer_append(&temp, buf , strlen(buf) ) ; 
 	dynamic_buffer_append(&temp, "\x1b[?25h" , 6 ) ; 
-        dynamic_buffer_append(&temp, "\x1b[H" , 3) ; 
-        write(STDOUT_FILENO , temp.data , temp.size)  ; 
-	free_dynamic_buffer(&temp) ; 
-} 
-
-void screen_normal_ready(){
-        struct  dynamic_buffer temp = dynamic_buffer_starter ; 
-	dynamic_buffer_append(&temp, "\x1b[?25l" , 6 ) ; 
-	dynamic_buffer_append(&temp, "\x1b[H" , 3) ; 
-	normal_tlides( &temp ) ; 
-	dynamic_buffer_append(&temp, "\x1b[?25h" , 6 ) ; 
-        dynamic_buffer_append(&temp, "\x1b[H" , 3) ; 
         write(STDOUT_FILENO , temp.data , temp.size)  ; 
 	free_dynamic_buffer(&temp) ; 
 } 
@@ -197,7 +252,9 @@ int get_window_size(int *rows , int *columns){
 	
 } 
 
-void window_size(){
+void starter(){
+      edit.cursor_rows = 0 ; 
+      edit.cursor_cols = 0 ; 
       if(get_window_size(&edit.rows , &edit.cols) == -1 ) { 
 		die("get_window_size") ; 
 	} 
@@ -206,19 +263,11 @@ void window_size(){
 
 int main(){
     rawmode() ; 
-    window_size() ;
-     screen_ready() ; 
-    while( raw_key_press() != -1 ) {
-        char c  =  raw_key_press() ; 
-        if ( c == ctrl('q')){ 
-           break ; 
-	} 
-        screen_normal_ready() ;
+    starter() ;
  
-    } 
 
     while(1) {
- 
+     screen_ready() ; 
     process_raw_key_press() ; 
     }
     return 0 ; 

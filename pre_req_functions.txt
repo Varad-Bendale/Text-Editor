@@ -44,5 +44,27 @@ Okay one of the optimisation over here was like see the clearing the entire scre
 Now we come on the part of the welcome part see we keep wherever we want to okay where ever you feel like okay and then as we need it we first look if the size of the thing is going outside of the terminal or not if it goes we chop off the size of the messege we have here so then its like it should fit in the terminal size we allocated thats it 
 So now lets tackle it one by one here okay see in the snprintf we are doing is whatever we have to type it it writes it in the variable for us and it also gives out the length of the entire thing which is written in the string 
 Welcome is the string used the sizeof(windows) the maximum size which can be allocated and the rest stuff is just the one which we are typing out thats it 
-Okay just for a good modification I wanted to add simple the welcome thing should come only when you don't type anything when you type it the welcome messege shouldn't come simple and yeah same while loop looking for the raw mode there and done
+
+
+Okay time for the cursor to move on our screen here 
+So now first what we do is we first add the attributes of the cursor position in the main structure which we have created and then we we make a enum of all the functions like 
+    Arrow_left ,
+    Arrow_right ,
+    Arrow_up ,
+    Arrow_down 
+One thing we need to know is the default cursor rows and cursor columns we need to keep 0 at the very first cause the in c int starts from 0 but our terminal always begins with 1 so before anything we need to increment both the attributes with 1 and then do whatever it is 
+So like the main int remains the 0,0 starts from here and we increment it but for these reasons we just need it add it every single time here 
+
+
+What is it see it directly assigned the button a number directly we are assigning here the higher number like 1000 so that no other conflict appears With as the ascii code should not interfere with these ones so a higher one one more note we just need to give 1 term a number the rest just goes on incrementing as we want 
+Now listen the cursor movements are also done by the escape sequences like 
+\x1b[A for moving up and similarly others 
+So what we check out the escape one first and make the buffer over here first we check the escape if the escape happens we exact the thing and then we check for the other stuff we make a buffer over here of 2 bits we just need to check 2 bits only but we make it for 3 bits cause for further we might need it 
+So we check the [ and the A/B/C/D if there we just call out the function we have we update the attributes which are created of cursor rows and the cursor columns as per the thing is and then we print it out 
+
+How do we print it we just add the thing in our main buffer which awe have over here some of the explanation I did said in upper part but rest is this 
+We do the snprintf which is the same it takes all the thing and then put it in the buffer 
+"\x1b[%d;%dH" , edit.cursor_rows + 1  , edit.cursor_cols + 1 
+Takes rows. Takes columns and then put it in the escape route 
+
 
