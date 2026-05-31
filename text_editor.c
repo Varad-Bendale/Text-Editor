@@ -24,11 +24,15 @@ struct dynamic_buffer{
 	int size ; 
 } ;
 
+int first = 0 ; 
+
 enum settings_keys {
     Arrow_left = 1000 ,
     Arrow_right ,
     Arrow_up ,
-    Arrow_down 
+    Arrow_down ,  
+    Page_up , 
+    Page_down
 } ;
 
 
@@ -92,7 +96,9 @@ int raw_key_press(){
     } 
     }
 
-    if ( c == '\x1b') { 
+    first = 1 ; 
+
+     if ( c == '\x1b') { 
 		char buf[3] ; 
 	   if ( read(STDIN_FILENO , &buf[0] , 1) != 1) { 
 		return '\x1b' ; 
@@ -100,13 +106,26 @@ int raw_key_press(){
 	   if ( read(STDIN_FILENO , &buf[1] , 1) != 1) { 
 		return '\x1b' ; 
 	     } 
-	if ( buf[0] == '[' ) { 
- 	  switch ( buf[1] ) {
-		case 'A' : return  Arrow_up ; 
-		case 'B' : return Arrow_down ; 
-		case 'C' : return  Arrow_right ; 
-		case 'D' : return Arrow_left ; 
-		}
+	   if ( buf[0] == '[' ) { 
+	       if ( buf[1] >= '0' && buf[1] <= '9' ) { 
+		   if ( read(STDIN_FILENO , &buf[2] , 1) != 1) { 
+		      return '\x1b' ; 
+	           } 
+		   if ( buf[2] == '~') { 
+ 		      switch( buf[1] ) { 
+			case '5' : return Page_up ; 
+			case '6' : return Page_down ; 		
+                   } 
+		   } 
+                  }
+		else { 
+ 	          switch ( buf[1] ) {
+	        	case 'A' : return  Arrow_up ; 
+	        	case 'B' : return Arrow_down ; 
+		       case 'C' : return  Arrow_right ; 
+		       case 'D' : return Arrow_left ; 
+		    }
+		} 
        } 
 	return '\x1b'  ; 
     }
@@ -116,7 +135,6 @@ int raw_key_press(){
     
 
 }
-
 
 
 
@@ -155,6 +173,20 @@ void process_raw_key_press(){
 	       write(STDOUT_FILENO , "\x1b[H" , 3 ) ; 
 	       exit(0)  ; 
               break ; 
+	  case Page_up : 
+	  case Page_down :
+		 {
+ 		int times  = edit.rows ; 
+		while(times > 0 ) { 
+		  if ( word == Arrow_up) { 
+			cursor_change(Arrow_up) ; 
+			times-- ; 
+		}
+		if ( word == Arrow_down) { 
+			cursor_change(Arrow_down) ; 
+			times-- ; 
+		}
+	   } 
 	  case Arrow_up : 
 	  case Arrow_down : 
 	  case Arrow_left : 
@@ -164,12 +196,14 @@ void process_raw_key_press(){
 	} 
 
 } 
+}
 
 
 
 void tlides(struct dynamic_buffer *temp  ){ 
 	char welcome[100] ; 
       for(int i = 0 ; i < edit.rows ; i++){
+		if ( first == 0 ) { 
 		if ( i == edit.rows / 2 ) {
             int  welcome_len = snprintf(welcome , sizeof(welcome) , "Type anything PalX Text editor %s", version ) ; 
 		if (welcome_len > edit.cols){
@@ -186,9 +220,8 @@ void tlides(struct dynamic_buffer *temp  ){
 		} 
 		dynamic_buffer_append(temp, welcome  , welcome_len ) ; 
 		}
-		else { 
-              dynamic_buffer_append(temp, "~" , 1) ; 
 		} 
+              dynamic_buffer_append(temp, "~" , 1) ; 
               dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
          if( i<edit.rows-1) {
               dynamic_buffer_append(temp, "\r\n", 2) ; 

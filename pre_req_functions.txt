@@ -65,6 +65,6 @@ So we check the [ and the A/B/C/D if there we just call out the function we have
 How do we print it we just add the thing in our main buffer which awe have over here some of the explanation I did said in upper part but rest is this 
 We do the snprintf which is the same it takes all the thing and then put it in the buffer 
 "\x1b[%d;%dH" , edit.cursor_rows + 1  , edit.cursor_cols + 1 
-Takes rows. Takes columns and then put it in the escape route 
+Takes rows. Takes columns and then put it in the escape sequence and then print it 
 
 
