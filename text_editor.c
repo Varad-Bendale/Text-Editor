@@ -6,14 +6,23 @@
 #include<string.h>
 #include<errno.h>
 #include<sys/ioctl.h> 
+#include<sys/types.h>
 #define ctrl(k) ((k) & 0x1f) 
 #define version "0.0.1"
 
+typedef struct row_input{ 
+	int size ; 
+	char *data ; 
+} row_input ; 
+
+ 
 struct editor_global { 
 	int cursor_rows ; 
 	int cursor_cols ; 
 	int rows  ; 
 	int cols ; 
+	row_input ri ;
+	int row_length ; 
 	struct termios original  ; 
 } ;
 
@@ -39,7 +48,32 @@ enum settings_keys {
 } ;
 
 
+
+
 #define dynamic_buffer_starter { NULL , 0 } 
+
+void text_in_input_buffer(char *file){ 
+    FILE *fp  = fopen(file , 'r') ;
+    if (!fp) {
+      die("fopen") ; 
+    }
+    char line  = NULL ; 
+    size_t mem = 0 
+    ssize_t len = getline(&line , &mem , fp  ) ;
+    if ( len != -1 ) { 
+    while( len > 0 && (  ( line[len-1] == '\n' ) ||  ( line[len-1] == '\r' ) ) )  {
+	    mem-- ; 	
+	} 
+    edit.ri.size = len ; 
+    edit.ri.data = malloc( len+1 ) ;  
+    memcpy(edit.ri.data , lines , len) ; 
+    edit.ri.data[len] = '\0' ; 
+    edit.row_length = 1  ; 
+    } 
+   free( lines) ; 
+   free ( fp ) ; 
+
+} 
 
 void dynamic_buffer_append( struct dynamic_buffer *temp  , const char *s , int len  ){ 
     char *need = realloc(temp->data , temp->size+len) ;
@@ -142,7 +176,7 @@ int raw_key_press(){
            	       case 'F' : return End_key;
 
                  } 
-			
+		}	
        } 
 	return '\x1b'  ; 
     }
@@ -221,9 +255,10 @@ void process_raw_key_press(){
 
 
 
-void tlides(struct dynamic_buffer *temp  ){ 
+void txt_print(struct dynamic_buffer *temp  ){ 
 	char welcome[100] ; 
       for(int i = 0 ; i < edit.rows ; i++){
+         if ( i >= edit.row_length) {
 		if ( first == 0 ) { 
 		if ( i == edit.rows / 2 ) {
             int  welcome_len = snprintf(welcome , sizeof(welcome) , "Type anything PalX Text editor %s", version ) ; 
@@ -241,9 +276,22 @@ void tlides(struct dynamic_buffer *temp  ){
 		} 
 		dynamic_buffer_append(temp, welcome  , welcome_len ) ; 
 		}
+          else { 
+		    dynamic_buffer_append(temp, "~" , 1) ; 
 		} 
+		}
+		else {  
               dynamic_buffer_append(temp, "~" , 1) ; 
+			} 
               dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
+		} 
+          else { 
+               if (edit.ri.size > edit.cols) { 
+				edit.ri.size = edit.cols ; 
+			} 
+               dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
+ 		    	dynamic_buffer_append(temp, edit.ri.data , edit.ri.size ) ; 
+          }
          if( i<edit.rows-1) {
               dynamic_buffer_append(temp, "\r\n", 2) ; 
          }
@@ -255,7 +303,7 @@ void screen_ready(){
         struct  dynamic_buffer temp = dynamic_buffer_starter ; 
 	dynamic_buffer_append(&temp, "\x1b[?25l" , 6 ) ; 
 	dynamic_buffer_append(&temp, "\x1b[H" , 3) ; 
-	tlides( &temp ) ; 
+	txt_print( &temp ) ; 
         char buf[32] ; 
 	snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , edit.cursor_rows + 1  , edit.cursor_cols + 1 ) ; 
        	dynamic_buffer_append(&temp, buf , strlen(buf) ) ; 
@@ -309,6 +357,7 @@ int get_window_size(int *rows , int *columns){
 void starter(){
       edit.cursor_rows = 0 ; 
       edit.cursor_cols = 0 ; 
+	edit.row_length = 0 ; 
       if(get_window_size(&edit.rows , &edit.cols) == -1 ) { 
 		die("get_window_size") ; 
 	} 
@@ -318,8 +367,7 @@ void starter(){
 int main(){
     rawmode() ; 
     starter() ;
- 
-
+    text_in_input_buffer() ; 
     while(1) {
      screen_ready() ; 
     process_raw_key_press() ; 
