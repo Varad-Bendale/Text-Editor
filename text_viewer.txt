@@ -1,0 +1,5 @@
+Okay here we deal up with the text which we have to display it and opening the already written text which are here in the file or something liek that 
+First we make a strict for the input which we have the 
+Typedef is simpler version of the structure we dont have to write struct again and again it just does the job easily and it contains the data and the size of the data which is there 
+We add the attribute of number of rows in the thing and update it as we do the thing is we just write whatever we want we then allocate the memory do the malloc update the struct which we have created with the size as per the length is of the text and then we do the malloc to the data attribute of the sturct see we do len + 1 cuase there is one \0 which we need to consider and add the malloc for it as well its usefulness is there as we can identify that the sentence is ended here and stuff like that then we memcpy copy all the contents present in the line to the data attribute in the struct and we then update the row count which we have in the main struct 
+
