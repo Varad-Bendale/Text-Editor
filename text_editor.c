@@ -7,6 +7,9 @@
 #include<errno.h>
 #include<sys/ioctl.h> 
 #include<sys/types.h>
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
 #define ctrl(k) ((k) & 0x1f) 
 #define version "0.0.1"
 
@@ -21,7 +24,8 @@ struct editor_global {
 	int cursor_cols ; 
 	int rows  ; 
 	int cols ; 
-	row_input ri ;
+      int row_offset ; 
+	row_input *ri ;
 	int row_length ; 
 	struct termios original  ; 
 } ;
@@ -52,28 +56,7 @@ enum settings_keys {
 
 #define dynamic_buffer_starter { NULL , 0 } 
 
-void text_in_input_buffer(char *file){ 
-    FILE *fp  = fopen(file , 'r') ;
-    if (!fp) {
-      die("fopen") ; 
-    }
-    char line  = NULL ; 
-    size_t mem = 0 
-    ssize_t len = getline(&line , &mem , fp  ) ;
-    if ( len != -1 ) { 
-    while( len > 0 && (  ( line[len-1] == '\n' ) ||  ( line[len-1] == '\r' ) ) )  {
-	    mem-- ; 	
-	} 
-    edit.ri.size = len ; 
-    edit.ri.data = malloc( len+1 ) ;  
-    memcpy(edit.ri.data , lines , len) ; 
-    edit.ri.data[len] = '\0' ; 
-    edit.row_length = 1  ; 
-    } 
-   free( lines) ; 
-   free ( fp ) ; 
 
-} 
 
 void dynamic_buffer_append( struct dynamic_buffer *temp  , const char *s , int len  ){ 
     char *need = realloc(temp->data , temp->size+len) ;
@@ -96,6 +79,36 @@ void die(const char *s) {
    perror( s ) ; 
    exit(1) ; 
 } 
+ 
+void append_lines( char *line , size_t len) { 
+    edit.ri = realloc( edit.ri , sizeof(row_input)*(edit.row_length+1) )  ;  
+    edit.ri[edit.row_length].size = len ; 
+    edit.ri[edit.row_length].data = malloc( len+1 ) ;  
+    memcpy(edit.ri[edit.row_length].data , line , len) ; 
+    edit.ri[edit.row_length].data[len] = '\0' ; 
+    edit.row_length++   ; 
+}  
+
+void text_in_input_buffer(char *file){ 
+    FILE *fp  = fopen(file , "r") ;
+    if (!fp) {									
+      die("fopen") ; 
+    }
+    char *line  = NULL ; 
+    size_t mem = 0  ; 
+    ssize_t len  ; 
+    while ( ( len =  getline(&line , &mem , fp  ) )  != -1  ) { 
+    while( len > 0 && (  ( line[len-1] == '\n' ) ||  ( line[len-1] == '\r' ) ) )  {
+	    len-- ; 	
+	} 
+    append_lines( line , len )  ; 
+   } 
+   free( line) ; 
+   fclose( fp ) ; 
+   first = 1 ; 
+
+} 
+
 
 void disable_raw_mode(){
 	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &edit.original) == -1){
@@ -198,7 +211,7 @@ void cursor_change(int c ){
 		} 
 		   break ; 
 	  case Arrow_down : 
-		if (edit.cursor_rows != edit.rows - 1) {
+		if (edit.cursor_rows < edit.row_length) {
 		  edit.cursor_rows += 1 ; 
 		} 
 		   break ; 
@@ -254,11 +267,20 @@ void process_raw_key_press(){
 }
 
 
+void scroll_offset(){
+     if ( edit.cursor_rows <=  edit.row_offset) { 
+            edit.cursor_rows  = edit.row_offset ; 
+      }
+      if ( edit.cursor_rows >= edit.row_offset + edit.rows ) { 
+		edit.row_offset = edit.cursor_rows - edit.rows + 1 ; 
+       } 
+} 
 
 void txt_print(struct dynamic_buffer *temp  ){ 
 	char welcome[100] ; 
       for(int i = 0 ; i < edit.rows ; i++){
-         if ( i >= edit.row_length) {
+		 int correct_row = i + edit.row_offset ; 
+         if ( correct_row >= edit.row_length) {
 		if ( first == 0 ) { 
 		if ( i == edit.rows / 2 ) {
             int  welcome_len = snprintf(welcome , sizeof(welcome) , "Type anything PalX Text editor %s", version ) ; 
@@ -286,11 +308,12 @@ void txt_print(struct dynamic_buffer *temp  ){
               dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
 		} 
           else { 
-               if (edit.ri.size > edit.cols) { 
-				edit.ri.size = edit.cols ; 
+               if (edit.ri[correct_row].size > edit.cols) { 
+				edit.ri[correct_row].size = edit.cols ; 
+             	dynamic_buffer_append(temp, edit.ri[correct_row].data , edit.ri[correct_row].size ) ; 
 			} 
+
                dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
- 		    	dynamic_buffer_append(temp, edit.ri.data , edit.ri.size ) ; 
           }
          if( i<edit.rows-1) {
               dynamic_buffer_append(temp, "\r\n", 2) ; 
@@ -298,14 +321,14 @@ void txt_print(struct dynamic_buffer *temp  ){
 }
 }
 
-
 void screen_ready(){
+        scroll_offset() ; 
         struct  dynamic_buffer temp = dynamic_buffer_starter ; 
 	dynamic_buffer_append(&temp, "\x1b[?25l" , 6 ) ; 
 	dynamic_buffer_append(&temp, "\x1b[H" , 3) ; 
 	txt_print( &temp ) ; 
         char buf[32] ; 
-	snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , edit.cursor_rows + 1  , edit.cursor_cols + 1 ) ; 
+	snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , (edit.cursor_rows - edit.row_offset )+ 1  , edit.cursor_cols + 1 ) ; 
        	dynamic_buffer_append(&temp, buf , strlen(buf) ) ; 
 	dynamic_buffer_append(&temp, "\x1b[?25h" , 6 ) ; 
         write(STDOUT_FILENO , temp.data , temp.size)  ; 
@@ -358,16 +381,20 @@ void starter(){
       edit.cursor_rows = 0 ; 
       edit.cursor_cols = 0 ; 
 	edit.row_length = 0 ; 
+      edit.ri = NULL ;  
+      edit.row_offset = 0 ; 
       if(get_window_size(&edit.rows , &edit.cols) == -1 ) { 
 		die("get_window_size") ; 
 	} 
 }
 
 
-int main(){
+int main(int argc , char *argv[] ){
     rawmode() ; 
     starter() ;
-    text_in_input_buffer() ; 
+    if (argc >= 2 ){ 
+	 text_in_input_buffer(argv[1]) ; 
+	} 
     while(1) {
      screen_ready() ; 
     process_raw_key_press() ; 
