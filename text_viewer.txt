@@ -19,3 +19,23 @@ See we have the offset like somewhere the page is upwards and the cursor is belo
 And on the next part if you can see if the cursor is gone wayyy further the offset is below then suppose the offset is at 20 and if the cursor is nowhere inside the screen in the thing and is very very far away so we then keep the offset as the cursor which is there - (the first term is needed ) so screen rows 
 This settles our cursor stuff only needed is the cursor showing or displaying we do it in the snprintf thing there we need to update if the cx is gone way way huge we need to reduce it with the offset so that we can get the correct path also we have restricted the arrow down part we remove restrictions over it as well 
 
+Okay see now we have few modifications in the txt print stuff okay see first of all were use this one here 
+		 int correct_row = i + edit.row_offset ; 
+ 
+So here are just taking all the things in the account before doing anything so like only the parts which we need to see will only be started from here its like that and as we have the protocol to clear the screen line by line as it is faster and better so it removes all the line first and then we append all the buffer lines which we have allocated to the particularly row ( correct_row ) this one and then from there we just we append all the text which are present in the stuff till the screen end and then print it see this is inversely true reverse as well as the cursor position is handled inversely	as well the offset needs to follow the cursor only so then our offset gets corrected and then we can do it 
+
+Now see here na the while loop works continuously anything different come we  do the work so now here we like change initialise the buffer every single time so that just the part which we want only come and we print it why not free it if we do then the st
+
+
+----------------------------------------
+Hey clear the doubt about the malloc and the realloc you had 
+
+---------------------------------------
+
+
+Okay we enable scrolling of the horizontal as well majority of the procedure is same as the row offset things change only at the printing stuff so like see first we were just passing out the data to the thing now what we do is we were passing entire thing in here 
+edit.ri[correct_row].data 
+This gave the address of the entire string to us and then the thing was printed but now we need to like as we go or scroll the thing we need to start the thing to printing from there onwards so now 
+&edit.ri[correct_row].data[edit.col_offset] 
+& is needed as it is the pointer towards the specific word here 
+Now also we need to print this things so the affect the part of the length of bytes of the text is so we need to like add the edge cases which causes the problem like these see the difference of the cursor and the offset can be negative so we need to make it correct as the byte size cannot be negative noe 0 also and done set 

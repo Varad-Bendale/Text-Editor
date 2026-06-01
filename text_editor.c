@@ -25,6 +25,7 @@ struct editor_global {
 	int rows  ; 
 	int cols ; 
       int row_offset ; 
+	int col_offset ; 
 	row_input *ri ;
 	int row_length ; 
 	struct termios original  ; 
@@ -201,8 +202,6 @@ int raw_key_press(){
 }
 
 
-
-
 void cursor_change(int c ){ 
 	switch (c)  {
 	  case Arrow_up : 
@@ -221,9 +220,7 @@ void cursor_change(int c ){
 		} 
 		   break ; 
 	case Arrow_right : 
-		if (edit.cursor_cols != edit.cols - 1) {
 		  edit.cursor_cols += 1  ; 
-		}		
 		   break ; 
 } 
 } 
@@ -269,12 +266,20 @@ void process_raw_key_press(){
 
 void scroll_offset(){
      if ( edit.cursor_rows <=  edit.row_offset) { 
-            edit.cursor_rows  = edit.row_offset ; 
+            edit.row_offset  = edit.cursor_rows ; 
       }
       if ( edit.cursor_rows >= edit.row_offset + edit.rows ) { 
 		edit.row_offset = edit.cursor_rows - edit.rows + 1 ; 
        } 
+      if ( edit.cursor_cols <= edit.col_offset) { 
+		edit.col_offset = edit.cursor_cols ; 
+	} 
+	if ( edit.cursor_cols >= edit.cols + edit.col_offset ) { 
+		edit.col_offset = edit.cursor_cols - edit.cols + 1  ; 
+	} 
 } 
+
+
 
 void txt_print(struct dynamic_buffer *temp  ){ 
 	char welcome[100] ; 
@@ -308,11 +313,14 @@ void txt_print(struct dynamic_buffer *temp  ){
               dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
 		} 
           else { 
-               if (edit.ri[correct_row].size > edit.cols) { 
-				edit.ri[correct_row].size = edit.cols ; 
-             	dynamic_buffer_append(temp, edit.ri[correct_row].data , edit.ri[correct_row].size ) ; 
+               int temp_len  = edit.ri[correct_row].size - edit.col_offset ; 
+			if (temp_len < 0 ) { 
+				temp_len = 0 ; 
 			} 
-
+                 if (temp_len > edit.cols) { 
+				temp_len = edit.cols ; 
+			} 
+             	dynamic_buffer_append(temp, &edit.ri[correct_row].data[edit.col_offset] , temp_len ) ; 
                dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
           }
          if( i<edit.rows-1) {
@@ -328,7 +336,7 @@ void screen_ready(){
 	dynamic_buffer_append(&temp, "\x1b[H" , 3) ; 
 	txt_print( &temp ) ; 
         char buf[32] ; 
-	snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , (edit.cursor_rows - edit.row_offset )+ 1  , edit.cursor_cols + 1 ) ; 
+	snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , (edit.cursor_rows - edit.row_offset )+ 1  ,(edit.cursor_cols - edit.col_offset )+ 1  ) ; 
        	dynamic_buffer_append(&temp, buf , strlen(buf) ) ; 
 	dynamic_buffer_append(&temp, "\x1b[?25h" , 6 ) ; 
         write(STDOUT_FILENO , temp.data , temp.size)  ; 
@@ -383,6 +391,7 @@ void starter(){
 	edit.row_length = 0 ; 
       edit.ri = NULL ;  
       edit.row_offset = 0 ; 
+	edit.col_offset = 0 ; 
       if(get_window_size(&edit.rows , &edit.cols) == -1 ) { 
 		die("get_window_size") ; 
 	} 
