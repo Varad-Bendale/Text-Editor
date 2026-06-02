@@ -31,6 +31,8 @@ struct editor_global {
 	struct termios original  ; 
 } ;
 
+
+
 struct editor_global  edit ; 
 
 struct dynamic_buffer{
@@ -202,28 +204,59 @@ int raw_key_press(){
 }
 
 
+
 void cursor_change(int c ){ 
 	switch (c)  {
 	  case Arrow_up : 
 		if( edit.cursor_rows  != 0 ) { 
+			if ( edit.cursor_rows  > 0 ) { 
+			  if ( edit.cursor_cols >  edit.ri[edit.cursor_rows -1  ].size ) { 
+			     edit.cursor_cols = edit.ri[edit.cursor_rows - 1  ].size ; 			
+			} 
+			} 
 		   edit.cursor_rows -= 1  ; 
 		} 
 		   break ; 
+
 	  case Arrow_down : 
 		if (edit.cursor_rows < edit.row_length) {
+		  if ( edit.cursor_rows < edit.row_length -1 ) { 
+			if ( edit.cursor_cols >  edit.ri[edit.cursor_rows + 1  ].size ) { 
+			   edit.cursor_cols = edit.ri[edit.cursor_rows + 1 ].size ; 
+			} 
+			} 
 		  edit.cursor_rows += 1 ; 
 		} 
 		   break ; 
+
+
+
 	 case Arrow_left : 
-		if( edit.cursor_cols  != 0 ) { 
-		   edit.cursor_cols -= 1  ;  
+		if ( edit.cursor_cols == 0  ) { 
+			if ( edit.cursor_rows != 0 ) { 
+			    edit.cursor_rows -= 1 ; 
+			    edit.cursor_cols = edit.ri[edit.cursor_rows].size - 1 ; 
+			 } 
+		   break ; 
 		} 
+		   edit.cursor_cols -= 1  ;  
 		   break ; 
+
+
 	case Arrow_right : 
+		if ( edit.cursor_cols > edit.ri[edit.cursor_rows].size ) { 
+			edit.cursor_rows += 1 ; 
+			edit.cursor_cols = 0 ; 
+			break ; 
+		} 
 		  edit.cursor_cols += 1  ; 
-		   break ; 
+		   break ;
+		
+		
 } 
 } 
+
+
 
 
 void process_raw_key_press(){
@@ -328,6 +361,9 @@ void txt_print(struct dynamic_buffer *temp  ){
          }
 }
 }
+
+
+
 
 void screen_ready(){
         scroll_offset() ; 
