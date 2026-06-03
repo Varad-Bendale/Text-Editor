@@ -12,10 +12,13 @@
 #define _GNU_SOURCE
 #define ctrl(k) ((k) & 0x1f) 
 #define version "0.0.1"
+#define tab_spaces 8
 
 typedef struct row_input{ 
 	int size ; 
 	char *data ; 
+	char *render  ; 
+	int render_size ; 
 } row_input ; 
 
  
@@ -29,6 +32,7 @@ struct editor_global {
 	row_input *ri ;
 	int row_length ; 
 	struct termios original  ; 
+      int render_cols ; 
 } ;
 
 
@@ -38,6 +42,7 @@ struct editor_global  edit ;
 struct dynamic_buffer{
  	char *data ; 
 	int size ; 
+
 } ;
 
 int first = 0 ; 
@@ -53,6 +58,7 @@ enum settings_keys {
     End_key  , 
     delete 
 } ;
+
 
 
 
@@ -75,7 +81,38 @@ void free_dynamic_buffer ( struct dynamic_buffer *temp){
       free(temp->data)  ; 
 }
 
- 
+
+
+void render_input(row_input ) { 
+	int tabs  = 0 ; 
+	for ( int i = 0 ; i < row_input.size ; i++ ) { 
+		if ( row_input.data[i] != '\t' ) { 
+			tabs = tabs + 1 ; 
+		} 
+	} 
+	free ( row_input->render) ; 
+	row_input->render = malloc( row_input.size + ( tabs*( tab_spaces -1  )  + 1  )  ; 
+
+	int k = 0 ; 
+	for ( int i = 0 ; i < row_input.size ; i++ ) { 
+		if ( row_input.data[i] != '\t') { 
+			row_input.render[k] = row_input.data[i] ; 
+			row_input.render_size += 1  ; 
+		      k = k + 1 ; 
+		} 
+		else { 
+			for ( int j = 0 ; j < tab_spaces ; j++ ) { 
+				row_input.render[k] = " "  ; 
+				row_input.render_size += 1  ; 
+		      	k = k + 1 ; 
+			} 
+	} 
+	  k = k +1 ; 
+	  row_input.render[k] = '\0' ; 
+	} 
+
+
+	       
 void die(const char *s) { 
    write(STDOUT_FILENO , "\x1b[2J" , 4 ) ; 
    write(STDOUT_FILENO , "\x1b[H" , 3 ) ; 
@@ -90,6 +127,9 @@ void append_lines( char *line , size_t len) {
     memcpy(edit.ri[edit.row_length].data , line , len) ; 
     edit.ri[edit.row_length].data[len] = '\0' ; 
     edit.row_length++   ; 
+    row_input.render = NULL ; 
+    row_input.render_size = 0 ; 
+    render_input(&edit.ri[edit.row_length]) ; 
 }  
 
 void text_in_input_buffer(char *file){ 
@@ -267,9 +307,26 @@ void process_raw_key_press(){
 	       write(STDOUT_FILENO , "\x1b[H" , 3 ) ; 
 	       exit(0)  ; 
               break ; 
+
 	  case Page_up : 
 	  case Page_down :
-		 {
+             if ( word == Page_up ) { 
+			if ( edit.row_offset - edit.rows > 0 ) { 
+				edit.cursor_rows = edit.row_offset - edit.rows  ; 
+			   } 
+			else { 
+				edit.cursor_rows = 0 ; 
+			}
+		   } 
+		  if (word == Page_down ) { 
+			if ( edit.row_offset + edit.rows < edit.row_length ){ 
+				edit.cursor_rows = edit.row_offset + edit.rows ; 
+		   } 
+			else { 
+			   edit.cursor_rows = edit.row_length - edit.rows ; 
+		 } 
+	    	} 
+		 
  		int times  = edit.rows ; 
 		while(times > 0 ) { 
 		  if ( word == Arrow_up) { 
@@ -280,11 +337,16 @@ void process_raw_key_press(){
 			cursor_change(Arrow_down) ; 
 			times-- ; 
 		}
-	   } 
+	  case End_key : 
+		if ( edit.cursor_rows < edit.row_offset + edit.rows ) { 
+			edit.cursor_cols = edit.ri[edit.cursor_rows].size ; 
+			break ; 
+		  } 
+
 	  case Home_key : 
 		edit.cols = 0  ; 
-          case End_key : 
-		edit.cursor_cols = edit.cols - 1 ; 
+
+
 	  case Arrow_up : 
 	  case Arrow_down : 
 	  case Arrow_left : 
@@ -297,18 +359,39 @@ void process_raw_key_press(){
 }
 
 
+
+int position_as_per_cursor( erow *row_input ){ 
+	int num  = 0 ; 
+	 for ( int i = 0 ; i < row_input.size ; i++ ) { 
+		if ( row_input.data[i] == '\t' ) { 
+			num = num + (tab_spaces -1 ) * ( num % tab_spaces ) ; 
+		} 
+			num = num + 1 ; 	
+	} 
+return num ; 
+} 
+
+
+
+
 void scroll_offset(){
-     if ( edit.cursor_rows <=  edit.row_offset) { 
+	edit.render_cols = 0 ; 
+            
+	if ( edit.cursor_rows < edit.rows ) { 
+      edit.render_cols = position_as_per_cursor( &E.row[E.cursor_row] )  ; 
+	} 
+		
+     if ( edit.cursor_rows <  edit.row_offset) { 
             edit.row_offset  = edit.cursor_rows ; 
       }
       if ( edit.cursor_rows >= edit.row_offset + edit.rows ) { 
 		edit.row_offset = edit.cursor_rows - edit.rows + 1 ; 
        } 
-      if ( edit.cursor_cols <= edit.col_offset) { 
-		edit.col_offset = edit.cursor_cols ; 
+      if ( edit.render_cols < edit.col_offset) { 
+		edit.col_offset = edit.render_cols ; 
 	} 
-	if ( edit.cursor_cols >= edit.cols + edit.col_offset ) { 
-		edit.col_offset = edit.cursor_cols - edit.cols + 1  ; 
+	if ( edit.render_cols >= edit.cols + edit.col_offset ) { 
+		edit.col_offset = edit.render_cols - edit.cols + 1  ; 
 	} 
 } 
 
@@ -346,14 +429,14 @@ void txt_print(struct dynamic_buffer *temp  ){
               dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
 		} 
           else { 
-               int temp_len  = edit.ri[correct_row].size - edit.col_offset ; 
+               int temp_len  = edit.ri[correct_row].render_size - edit.col_offset ; 
 			if (temp_len < 0 ) { 
 				temp_len = 0 ; 
 			} 
                  if (temp_len > edit.cols) { 
 				temp_len = edit.cols ; 
 			} 
-             	dynamic_buffer_append(temp, &edit.ri[correct_row].data[edit.col_offset] , temp_len ) ; 
+             	dynamic_buffer_append(temp, &edit.ri[correct_row].render[edit.col_offset] , temp_len ) ; 
                dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
           }
          if( i<edit.rows-1) {
@@ -372,7 +455,7 @@ void screen_ready(){
 	dynamic_buffer_append(&temp, "\x1b[H" , 3) ; 
 	txt_print( &temp ) ; 
         char buf[32] ; 
-	snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , (edit.cursor_rows - edit.row_offset )+ 1  ,(edit.cursor_cols - edit.col_offset )+ 1  ) ; 
+	snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , (edit.cursor_rows - edit.row_offset )+ 1  ,(edit.render_cols - edit.col_offset )+ 1  ) ; 
        	dynamic_buffer_append(&temp, buf , strlen(buf) ) ; 
 	dynamic_buffer_append(&temp, "\x1b[?25h" , 6 ) ; 
         write(STDOUT_FILENO , temp.data , temp.size)  ; 
