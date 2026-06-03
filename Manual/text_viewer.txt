@@ -38,4 +38,38 @@ edit.ri[correct_row].data
 This gave the address of the entire string to us and then the thing was printed but now we need to like as we go or scroll the thing we need to start the thing to printing from there onwards so now 
 &edit.ri[correct_row].data[edit.col_offset] 
 & is needed as it is the pointer towards the specific word here 
-Now also we need to print this things so the affect the part of the length of bytes of the text is so we need to like add the edge cases which causes the problem like these see the difference of the cursor and the offset can be negative so we need to make it correct as the byte size cannot be negative noe 0 also and done set 
+Now also we need to print this things so the affect the part of the length of bytes of the text is so we need to like add the edge cases which causes the problem like these see the difference of the cursor and the offset can be negative so we need to make it correct as the byte size cannot be negative now 0 also and done set 
+
+We come on the the arrow keys again see now the issue can come where like you scrolled a lot to the right and now we wirte something its just not that good and makes no sense so we keep the option limited to only scroll the right till the line is present or not 
+With the arrow left if we reach to the first character we might need it on the last lines end part so that needs to be executed 
+
+And on the critical part now see if some line is big and we do like arrow up and arrow down and their size is smaller than the one line then the cursor moves to point which is far away from where it needs to be so that modifications needs to be done on the arrow up and arrow down 
+
+Comming on some common commands like 
+End key which takes the cursor to directly the end of the line now we need to make sure that the cursor should be present in the screen if this function needs to be used else it would go like somewhere absurd so we need to check first the cursor position and then do the stuff 
+
+Home key takes us to the first line no need for anything here 
+
+Page up and the page down see the page up means it goes one entire page up and vice a versa so we need to check the entire thing all the conditions must be satisfied for this to happen so yeah its like that 
+
+Coming on the tab function see we press tab function now in various various os the tab is defined different different we need to make a solid proof of it like it can make issues in the cursor positions and visual things as well so now see we can do the normally which we did for the \n\r like if conditions and edit those attributes but the thing is this functions is needed again and again in further like searching etc so we need to make a new array of the characters for this one and maintain the visual representation of the line on this one now this is needed as the char thing is see if we want some specific letter or the cursor positions or the also problems would arise with the size as well so we simply create a new one 
+
+Okay so see the thing is simple we just add the stuff as it is in the data already present in the data which we have just at the position of the \t we just add the spaces which extra are needed so we take it like that and also add the length which is extra as per it 
+Now we pass out the address of the line of the thing and then we add all of those in this render now about the size of the render what we do is we take this 
+Already size + ( tabs * ( spaces of tabs -1 )  )  
+Why spaces of tabs -1  cause simple see in the size of line the \t each of them is of 1 byte and it is already included so we don't need to like make it so we just add the extra spaces whose size is not considered simple 
+
+And we call this function everywhere the where we add the all these characters to the data stutter of the row input here we just initialise the render data as null and the size as 0 and then call the function which adds the data to the render data 
+
+Okay about the cursor thing in the tab thing the cursor don't really perform correctly so we need to make it correct here we so we make a new attribute of the render cursor cause its just easier and its specifically used for iteration of cursor in the render the normal cursor is used in the iterations of just characters 
+So we also need to make the converter which does this one converts the cursor cols to render cols we pass the data and it does the stuff 
+Now see a thing many of times we do some spaces and do spaces and then click on the tab then our cursor directly reaches the part so we need to make this thing like we cannot just add the thing directly we need to add only the part so that the cursor should go the multiple of that part only 
+(tab_spaces -1 ) * ( num % tab_spaces ) this does the thing and in the rest of the parts we just add the things 
+
+----------------
+Issues with the arrow up and the arrow down are still there please look into it and correct it out 
+
+
+____________________
+
+
