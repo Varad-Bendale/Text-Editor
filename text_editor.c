@@ -83,33 +83,38 @@ void free_dynamic_buffer ( struct dynamic_buffer *temp){
 
 
 
-void render_input(row_input ) { 
+void render_input(row_input *row ) { 
 	int tabs  = 0 ; 
-	for ( int i = 0 ; i < row_input.size ; i++ ) { 
-		if ( row_input.data[i] != '\t' ) { 
+	for ( int i = 0 ; i < row->size ; i++ ) { 
+		if ( row->data[i] == '\t' ) { 
 			tabs = tabs + 1 ; 
 		} 
 	} 
-	free ( row_input->render) ; 
-	row_input->render = malloc( row_input.size + ( tabs*( tab_spaces -1  )  + 1  )  ; 
+	free ( row->render) ; 
+	row->render = malloc( row->size + ( tabs*( tab_spaces -1  )  + 1  ) ) ; 
 
 	int k = 0 ; 
-	for ( int i = 0 ; i < row_input.size ; i++ ) { 
-		if ( row_input.data[i] != '\t') { 
-			row_input.render[k] = row_input.data[i] ; 
-			row_input.render_size += 1  ; 
+	for ( int i = 0 ; i < row->size ; i++ ) { 
+		if ( row->data[i] != '\t') { 
+			row->render[k] = row->data[i] ; 
+			row->render_size += 1  ; 
 		      k = k + 1 ; 
 		} 
 		else { 
-			for ( int j = 0 ; j < tab_spaces ; j++ ) { 
-				row_input.render[k] = " "  ; 
-				row_input.render_size += 1  ; 
+		   row->render[k] = ' '  ;
+			k = k + 1 ;   
+			while(k % tab_spaces != 0  )  { 
+				row->render[k] = ' '  ; 
+				row->render_size += 1  ; 
 		      	k = k + 1 ; 
 			} 
 	} 
+    } 
 	  k = k +1 ; 
-	  row_input.render[k] = '\0' ; 
+	  row->render[k] = '\0' ; 
+	row->render_size = k ; 
 	} 
+
 
 
 	       
@@ -126,10 +131,10 @@ void append_lines( char *line , size_t len) {
     edit.ri[edit.row_length].data = malloc( len+1 ) ;  
     memcpy(edit.ri[edit.row_length].data , line , len) ; 
     edit.ri[edit.row_length].data[len] = '\0' ; 
-    edit.row_length++   ; 
-    row_input.render = NULL ; 
-    row_input.render_size = 0 ; 
+    edit.ri[edit.row_length].render = NULL ; 
+    edit.ri[edit.row_length].render_size = 0 ; 
     render_input(&edit.ri[edit.row_length]) ; 
+    edit.row_length++   ; 
 }  
 
 void text_in_input_buffer(char *file){ 
@@ -249,10 +254,8 @@ void cursor_change(int c ){
 	switch (c)  {
 	  case Arrow_up : 
 		if( edit.cursor_rows  != 0 ) { 
-			if ( edit.cursor_rows  > 0 ) { 
 			  if ( edit.cursor_cols >  edit.ri[edit.cursor_rows -1  ].size ) { 
 			     edit.cursor_cols = edit.ri[edit.cursor_rows - 1  ].size ; 			
-			} 
 			} 
 		   edit.cursor_rows -= 1  ; 
 		} 
@@ -275,7 +278,7 @@ void cursor_change(int c ){
 		if ( edit.cursor_cols == 0  ) { 
 			if ( edit.cursor_rows != 0 ) { 
 			    edit.cursor_rows -= 1 ; 
-			    edit.cursor_cols = edit.ri[edit.cursor_rows].size - 1 ; 
+			    edit.cursor_cols = edit.ri[edit.cursor_rows].size  ; 
 			 } 
 		   break ; 
 		} 
@@ -284,14 +287,16 @@ void cursor_change(int c ){
 
 
 	case Arrow_right : 
-		if ( edit.cursor_cols > edit.ri[edit.cursor_rows].size ) { 
-			edit.cursor_rows += 1 ; 
+		if ( edit.cursor_cols < edit.ri[edit.cursor_rows].size ) { 
+			edit.cursor_cols += 1 ; 
+		} 
+		else { 
+		if ( edit.cursor_rows < edit.row_length  -1 ) { 
+		      edit.cursor_rows += 1 ; 
 			edit.cursor_cols = 0 ; 
 			break ; 
+			} 
 		} 
-		  edit.cursor_cols += 1  ; 
-		   break ;
-		
 		
 } 
 } 
@@ -360,11 +365,11 @@ void process_raw_key_press(){
 
 
 
-int position_as_per_cursor( erow *row_input ){ 
+int position_as_per_cursor( row_input *row ){ 
 	int num  = 0 ; 
-	 for ( int i = 0 ; i < row_input.size ; i++ ) { 
-		if ( row_input.data[i] == '\t' ) { 
-			num = num + (tab_spaces -1 ) * ( num % tab_spaces ) ; 
+	 for ( int i = 0 ; i < edit.cursor_cols ; i++ ) { 
+		if ( row->data[i] == '\t' ) { 
+			num = num + (tab_spaces  -1 ) - ( num % tab_spaces ); 
 		} 
 			num = num + 1 ; 	
 	} 
@@ -378,7 +383,7 @@ void scroll_offset(){
 	edit.render_cols = 0 ; 
             
 	if ( edit.cursor_rows < edit.rows ) { 
-      edit.render_cols = position_as_per_cursor( &E.row[E.cursor_row] )  ; 
+      edit.render_cols = position_as_per_cursor( &edit.ri[edit.cursor_rows] )  ; 
 	} 
 		
      if ( edit.cursor_rows <  edit.row_offset) { 
@@ -483,7 +488,7 @@ int cursor_position(int *rows, int *cols) {
      if(sscanf(&temp[2]  , "%d;%d" , rows , cols ) !=2 ) {
           return -1 ; 
       } 
-     return 0;
+     return 0;                         
 }
 	
 
@@ -506,7 +511,7 @@ int get_window_size(int *rows , int *columns){
 
 void starter(){
       edit.cursor_rows = 0 ; 
-      edit.cursor_cols = 0 ; 
+      edit.cursor_cols = 0 ;
 	edit.row_length = 0 ; 
       edit.ri = NULL ;  
       edit.row_offset = 0 ; 
