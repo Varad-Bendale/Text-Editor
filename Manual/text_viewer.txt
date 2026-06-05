@@ -64,7 +64,11 @@ And we call this function everywhere the where we add the all these characters t
 Okay about the cursor thing in the tab thing the cursor don't really perform correctly so we need to make it correct here we so we make a new attribute of the render cursor cause its just easier and its specifically used for iteration of cursor in the render the normal cursor is used in the iterations of just characters 
 So we also need to make the converter which does this one converts the cursor cols to render cols we pass the data and it does the stuff 
 Now see a thing many of times we do some spaces and do spaces and then click on the tab then our cursor directly reaches the part so we need to make this thing like we cannot just add the thing directly we need to add only the part so that the cursor should go the multiple of that part only 
-(tab_spaces -1 ) * ( num % tab_spaces ) this does the thing and in the rest of the parts we just add the things 
+(tab_spaces -1 ) - ( num % tab_spaces ) this does the thing and in the rest of the parts we just add the things 
+
+Why this one simple we the tab function always follow the multiple for the index for the tab spaces which we define for the and then so this one helps in it for us 
+
+
 
 ----------------
 Issues with the arrow up and the arrow down are still there please look into it and correct it out 
@@ -72,4 +76,10 @@ Issues with the arrow up and the arrow down are still there please look into it 
 
 ____________________
 
+Now we jump on the status symbol in the end of the line we have the last lone is dedicated for the status like what is the file name and the number of lines nd all those status stuff is present in here 
 
+Now listen we have to differentiate this line we kinda need got make the colors inverted for it so we use the escape sequence of the [7m which does the part now we need to add the spaces if nothing is here so that the we can invert the cooler we need to give the input to make it inverted so this is the thing and also we [m so that the next ones dont get the inverted colors 
+
+Onto the next part we remove the last line from the thing so that the we dont access the status line 
+ 
+We add the details of it line filename the cursor positions and the line which we are accessing like 2nd line of all like that format we add in it 
