@@ -33,6 +33,7 @@ struct editor_global {
 	int row_length ; 
 	struct termios original  ; 
       int render_cols ; 
+	char *filename ; 
 } ;
 
 
@@ -139,6 +140,7 @@ void append_lines( char *line , size_t len) {
 
 void text_in_input_buffer(char *file){ 
     FILE *fp  = fopen(file , "r") ;
+    edit.filename = strdup(file) ; 
     if (!fp) {									
       die("fopen") ; 
     }
@@ -250,6 +252,7 @@ int raw_key_press(){
 
 
 
+
 void cursor_change(int c ){ 
 	switch (c)  {
 	  case Arrow_up : 
@@ -262,6 +265,7 @@ void cursor_change(int c ){
 		   break ; 
 
 	  case Arrow_down : 
+		
 		if (edit.cursor_rows < edit.row_length) {
 		  if ( edit.cursor_rows < edit.row_length -1 ) { 
 			if ( edit.cursor_cols >  edit.ri[edit.cursor_rows + 1  ].size ) { 
@@ -401,6 +405,34 @@ void scroll_offset(){
 } 
 
 
+void status_line(struct dynamic_buffer *temp ) { 
+	dynamic_buffer_append(temp, "\x1b[7m" , 4) ; 
+	int len = 0 ; 
+	 char file[80] ; 
+	char position[80] ; 
+	if ( edit.filename == NULL ) { 
+	  edit.filename = "NAME NOT DETECTED"  ;   
+	} 
+	int pos_len = 0 ; 
+	len = snprintf( file , sizeof(file)  , "%20s - %d - %d " , edit.filename , edit.cursor_rows , edit.cursor_cols )  ; 
+	pos_len = snprintf( position , sizeof(position) , "%d-%d" , edit.cursor_rows + 1  , edit.row_length ) ; 
+      if(len > edit.cols) { 
+		len = edit.cols ; 
+	} 
+	for (int i = 0 ; i < edit.cols ; i++) { 	
+			dynamic_buffer_append(temp ," "  ,  1 ) ; 
+	} 	
+
+	if ( pos_len == edit.cols - i) { 
+			dynamic_buffer_append(temp ,position ,  pos_len ) ; 
+			break ; 
+	} 
+	dynamic_buffer_append(temp, file , len) ; 
+	dynamic_buffer_append(temp, "\x1b[m" , 3) ; 		
+
+} 
+
+
 
 void txt_print(struct dynamic_buffer *temp  ){ 
 	char welcome[100] ; 
@@ -431,7 +463,6 @@ void txt_print(struct dynamic_buffer *temp  ){
 		else {  
               dynamic_buffer_append(temp, "~" , 1) ; 
 			} 
-              dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
 		} 
           else { 
                int temp_len  = edit.ri[correct_row].render_size - edit.col_offset ; 
@@ -442,11 +473,10 @@ void txt_print(struct dynamic_buffer *temp  ){
 				temp_len = edit.cols ; 
 			} 
              	dynamic_buffer_append(temp, &edit.ri[correct_row].render[edit.col_offset] , temp_len ) ; 
-               dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
+
           }
-         if( i<edit.rows-1) {
+               dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
               dynamic_buffer_append(temp, "\r\n", 2) ; 
-         }
 }
 }
 
@@ -459,6 +489,7 @@ void screen_ready(){
 	dynamic_buffer_append(&temp, "\x1b[?25l" , 6 ) ; 
 	dynamic_buffer_append(&temp, "\x1b[H" , 3) ; 
 	txt_print( &temp ) ; 
+	status_line(&temp) ; 
         char buf[32] ; 
 	snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , (edit.cursor_rows - edit.row_offset )+ 1  ,(edit.render_cols - edit.col_offset )+ 1  ) ; 
        	dynamic_buffer_append(&temp, buf , strlen(buf) ) ; 
@@ -519,6 +550,8 @@ void starter(){
       if(get_window_size(&edit.rows , &edit.cols) == -1 ) { 
 		die("get_window_size") ; 
 	} 
+	edit.rows  = edit.rows - 1  ; 
+	edit.filename = NULL ; 
 }
 
 
