@@ -53,6 +53,7 @@ struct dynamic_buffer{
 int first = 0 ; 
 
 enum settings_keys {
+	Backspace = 127 , 
     Arrow_left = 1000 ,
     Arrow_right ,
     Arrow_up ,
@@ -88,7 +89,7 @@ void free_dynamic_buffer ( struct dynamic_buffer *temp){
 
 
 
-void (row_input *row ) { 
+void render_input (row_input *row ) { 
 	int tabs  = 0 ; 
 	for ( int i = 0 ; i < row->size ; i++ ) { 
 		if ( row->data[i] == '\t' ) { 
@@ -256,7 +257,6 @@ int raw_key_press(){
 
 
 
-
 void cursor_change(int c ){ 
 	switch (c)  {
 	  case Arrow_up : 
@@ -305,9 +305,31 @@ void cursor_change(int c ){
 			break ; 
 			} 
 		} 
+	
+   
+  }
 		
 } 
-} 
+
+void insert_char( row_input *line ,  int pos ,  int c ){ 
+	if ( pos < 0 || pos > line->size ){ 
+		pos  = line->size ; 
+	}
+	line->data = realloc( line->data , line->size + 2 ) ; 
+    memmove( &line->data[pos+ 1 ] , &line->data[pos] ,  line->size - pos + 1 ) ; 
+	line->size++ ; 
+	line->data[pos] = c ; 
+	render_input(line)  ; 
+}
+
+void insert(int c ) {
+	if (edit.cursor_rows == edit.row_length ){ 
+         append_lines("" , 0 ) ; 
+	}
+	int pos  = edit.cursor_cols ; 
+	insert_char( &edit.ri[edit.cursor_rows] ,   pos ,   c) ; 
+	edit.cursor_cols++ ; 
+}
 
 
 
@@ -359,6 +381,11 @@ void process_raw_key_press(){
 	  case Home_key : 
 		edit.cols = 0  ; 
 
+      case Backspace:
+      case ctrl('h'):
+      case delete:
+
+        break;
 
 	  case Arrow_up : 
 	  case Arrow_down : 
@@ -366,6 +393,12 @@ void process_raw_key_press(){
 	  case Arrow_right : 
 		 cursor_change(word) ; 
 		break ; 
+	  case ctrl('l'):
+      case '\x1b':
+         break;
+	  default:
+         insert(word);
+         break;
 	} 
 
 } 
@@ -516,16 +549,6 @@ void txt_print(struct dynamic_buffer *temp  ){
 }
 
 
-void insert_char( row_input *line ,  int pos ,  int c ){ 
-	if ( pos < 0 || pos > line->size ){ 
-		pos  = line->size ; 
-	}
-	line->data = realloc( line->data , line->size + 2 ) ; 
-    memmove( &line->data[pos+ 1 ] , &line->data[pos] ,  line->size - pos + 2 ) ; 
-	line->size++ ; 
-	line->data[pos] = c ; 
-	render_input(line)  ; 
-}
 
 void screen_ready(){
         scroll_offset() ; 
