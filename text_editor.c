@@ -7,6 +7,8 @@
 #include<errno.h>
 #include<sys/ioctl.h> 
 #include<sys/types.h>
+#include<time.h>
+#include <stdarg.h>
 #define _DEFAULT_SOURCE
 #define _BSD_SOURCE
 #define _GNU_SOURCE
@@ -34,6 +36,8 @@ struct editor_global {
 	struct termios original  ; 
       int render_cols ; 
 	char *filename ; 
+	char status_messege[80] ; 
+	time_t messege_time ; 
 } ;
 
 
@@ -84,7 +88,7 @@ void free_dynamic_buffer ( struct dynamic_buffer *temp){
 
 
 
-void render_input(row_input *row ) { 
+void (row_input *row ) { 
 	int tabs  = 0 ; 
 	for ( int i = 0 ; i < row->size ; i++ ) { 
 		if ( row->data[i] == '\t' ) { 
@@ -404,6 +408,36 @@ void scroll_offset(){
 	} 
 } 
 
+void status_msg_input (const char* msg , ...  ){ 
+    va_list temp   ; 
+	va_start(temp  , msg) ; 
+	vsnprintf( edit.status_messege , sizeof(edit.status_messege ) , msg , temp) ; 
+	va_end(temp) ; 
+    edit.messege_time = time(NULL) ; 
+}
+
+
+void status_msg(struct dynamic_buffer *temp ) { 
+	dynamic_buffer_append(temp, "\x1b[7m" , 4) ; 
+	int msglen = 0 ;
+	msglen = strlen(edit.status_messege) ; 
+	if ( msglen > edit.cols){
+		msglen = edit.cols ; 
+	}
+	int k = 0 ; 
+	if (msglen > 0 &&  time(NULL) - edit.messege_time  < 5 ){ 
+		dynamic_buffer_append(temp, edit.status_messege , msglen) ; 
+		k = 1 ; 
+	} 
+	int tes = 0  ; 
+	if ( k == 1 ) tes = msglen ; 
+	for (int i = tes ; i < edit.cols ; i++ ){ 
+		dynamic_buffer_append(temp, " " , 1) ; 
+	}
+	dynamic_buffer_append(temp, "\x1b[m" , 3) ; 
+}
+
+
 
 void status_line(struct dynamic_buffer *temp ) { 
 	dynamic_buffer_append(temp, "\x1b[7m" , 4) ; 
@@ -414,20 +448,21 @@ void status_line(struct dynamic_buffer *temp ) {
 	  edit.filename = "NAME NOT DETECTED"  ;   
 	} 
 	int pos_len = 0 ; 
-	len = snprintf( file , sizeof(file)  , "%20s - %d - %d " , edit.filename , edit.cursor_rows , edit.cursor_cols )  ; 
+	len = snprintf( file , sizeof(file)  , "%s - %d - %d " , edit.filename , edit.cursor_rows , edit.cursor_cols )  ; 
 	pos_len = snprintf( position , sizeof(position) , "%d-%d" , edit.cursor_rows + 1  , edit.row_length ) ; 
       if(len > edit.cols) { 
 		len = edit.cols ; 
 	} 
-	for (int i = 0 ; i < edit.cols ; i++) { 	
-			dynamic_buffer_append(temp ," "  ,  1 ) ; 
-	} 	
-
-	if ( pos_len == edit.cols - i) { 
-			dynamic_buffer_append(temp ,position ,  pos_len ) ; 
-			break ; 
-	} 
+	if ( len <= edit.cols ) { 
 	dynamic_buffer_append(temp, file , len) ; 
+	} 
+	for (int i = len ; i < edit.cols - pos_len  ; i++) { 	
+			dynamic_buffer_append(temp ," "  ,  1 ) ; 
+		}  
+	dynamic_buffer_append(temp, position , pos_len) ; 
+
+	
+
 	dynamic_buffer_append(temp, "\x1b[m" , 3) ; 		
 
 } 
@@ -481,7 +516,16 @@ void txt_print(struct dynamic_buffer *temp  ){
 }
 
 
-
+void insert_char( row_input *line ,  int pos ,  int c ){ 
+	if ( pos < 0 || pos > line->size ){ 
+		pos  = line->size ; 
+	}
+	line->data = realloc( line->data , line->size + 2 ) ; 
+    memmove( &line->data[pos+ 1 ] , &line->data[pos] ,  line->size - pos + 2 ) ; 
+	line->size++ ; 
+	line->data[pos] = c ; 
+	render_input(line)  ; 
+}
 
 void screen_ready(){
         scroll_offset() ; 
@@ -490,6 +534,7 @@ void screen_ready(){
 	dynamic_buffer_append(&temp, "\x1b[H" , 3) ; 
 	txt_print( &temp ) ; 
 	status_line(&temp) ; 
+	status_msg(&temp) ; 
         char buf[32] ; 
 	snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , (edit.cursor_rows - edit.row_offset )+ 1  ,(edit.render_cols - edit.col_offset )+ 1  ) ; 
        	dynamic_buffer_append(&temp, buf , strlen(buf) ) ; 
@@ -550,7 +595,9 @@ void starter(){
       if(get_window_size(&edit.rows , &edit.cols) == -1 ) { 
 		die("get_window_size") ; 
 	} 
-	edit.rows  = edit.rows - 1  ; 
+	edit.status_messege[0] = '\0' ; 
+	edit.messege_time = 0 ; 
+	edit.rows  = edit.rows - 2  ; 
 	edit.filename = NULL ; 
 }
 
@@ -561,6 +608,7 @@ int main(int argc , char *argv[] ){
     if (argc >= 2 ){ 
 	 text_in_input_buffer(argv[1]) ; 
 	} 
+	status_msg_input( "ctrl + q for quitting ") ; 
     while(1) {
      screen_ready() ; 
     process_raw_key_press() ; 
