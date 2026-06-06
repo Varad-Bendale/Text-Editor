@@ -1,7 +1,7 @@
 Okay here we deal up with the text which we have to display it and opening the already written text which are here in the file or something like that 
 First we make a strict for the input which we have the 
 Typedef is simpler version of the structure we don't have to write struct again and again it just does the job easily and it contains the data and the size of the data which is there 
-We add the attribute of number of rows in the thing and update it as we do the thing is we just write whatever we want we then allocate the memory do the malloc update the struct which we have created with the size as per the length is of the text and then we do the malloc to the data attribute of the sturct see we do len + 1 cuase there is one \0 which we need to consider and add the malloc for it as well its usefulness is there as we can identify that the sentence is ended here and stuff like that then we memcpy copy all the contents present in the line to the data attribute in the struct and we then update the row count which we have in the main struct
+We add the attribute of number of rows in the thing and update it as we do the thing is we just write whatever we want we then allocate the memory do the malloc update the struct which we have created with the size as per the length is of the text and then we do the malloc to the data attribute of the sturct see we do len + 1 cause there is one \0 which we need to consider and add the malloc for it as well its usefulness is there as we can identify that the sentence is ended here and stuff like that then we memcpy copy all the contents present in the line to the data attribute in the struct and we then update the row count which we have in the main struct
 Malloc syntax is like 
   
 Now here we kind of open up the file and then open it for reading purpose and then we do the getline what it does is it takes all the content in the file and then Put it in the lines or part we want to put it in and if we assign it to the variable we can get the length of the thing as well and now here in the string may contain \n\r we kind of want to skip those as well as they are of no use so we do it and in the very end the memory which we gave to the lines we free them up so that it don't take the excess stupid memory 
@@ -80,6 +80,37 @@ Now we jump on the status symbol in the end of the line we have the last lone is
 
 Now listen we have to differentiate this line we kinda need got make the colors inverted for it so we use the escape sequence of the [7m which does the part now we need to add the spaces if nothing is here so that the we can invert the cooler we need to give the input to make it inverted so this is the thing and also we [m so that the next ones dont get the inverted colors 
 
-Onto the next part we remove the last line from the thing so that the we dont access the status line 
+Onto the next part we remove the last line from the thing so that the we don't access the status line 
  
 We add the details of it line filename the cursor positions and the line which we are accessing like 2nd line of all like that format we add in it 
+
+Okay we remove one more line the very last line is kept for keeping the messages like helping messages like ctrl +q for exit or stuff like those you get it now see 
+There is this library of the time which like calculate all the seconds after the 1970 stuff so it does it and denoted by time(NULL) for getting the stuff and 
+
+Its kinda optional if you want to invert the colors or not I did cuase why not its kinda cool here 
+Okay here comes the list of new things valets this is used to get all the augmented values to store the thing like for example 
+"Hello I am %s" varad now here you need to carry it again and again for the thing to send it like if you use the snprintf you need to send both of them instead you can just send it to the valets it keeps on appending th stuff one by one for example 
+
+'S' → copy →  "S"
+'a' → copy →  "Sa"
+'v' → copy →  "Sav"
+'e' → copy →  "Save"
+'d' → copy →  "Saved"
+' ' → copy →  "Saved "
+
+'%' → STOP! look at next char...
+  'd' → call va_arg(ap, int) → pulls 42 from the list
+       → write 42 → "Saved 42"
+       → ap now points to nothing (list exhausted)
+
+' ' → copy →  "Saved 42 "
+'l' → copy →  "Saved 42 l"
+'i' → copy →  "Saved 42 li"
+'n' → copy →  "Saved 42 lin"
+'e' → copy →  "Saved 42 line"
+'s' → copy →  "Saved 42 lines"
+
+
+Like this one is cool like here the loop kinda starts from the start and goes till the end and then we have kept the list of the sentence as well so our messege gets copied 
+
+Now we also have the timer here like once the messege is displayed it should jsut show it for 5 seconds only 
