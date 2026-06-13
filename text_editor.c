@@ -9,12 +9,14 @@
 #include<sys/types.h>
 #include<time.h>
 #include <stdarg.h>
+#include <fcntl.h>
 #define _DEFAULT_SOURCE
 #define _BSD_SOURCE
 #define _GNU_SOURCE
 #define ctrl(k) ((k) & 0x1f) 
 #define version "0.0.1"
 #define tab_spaces 8
+#define quit 1
 
 typedef struct row_input{ 
 	int size ; 
@@ -33,6 +35,7 @@ struct editor_global {
 	int col_offset ; 
 	row_input *ri ;
 	int row_length ; 
+	int changes ; 
 	struct termios original  ; 
       int render_cols ; 
 	char *filename ; 
@@ -72,6 +75,57 @@ enum settings_keys {
 #define dynamic_buffer_starter { NULL , 0 } 
 
 
+void status_msg_input (const char* msg , ...  ){ 
+    va_list temp   ; 
+	va_start(temp  , msg) ; 
+	vsnprintf( edit.status_messege , sizeof(edit.status_messege ) , msg , temp) ; 
+	va_end(temp) ; 
+    edit.messege_time = time(NULL) ; 
+}
+
+
+char *before_saving(int *buflen){
+	int len = 0 ; 
+	for ( int i = 0 ; i < edit.row_length ; i++ ){ 
+			len = len + edit.ri[i].size ; 
+	}
+	*buflen = len ; 
+	char *buf  = malloc(len+edit.row_length)  ; 
+	char *p = buf ; 
+	for ( int i = 0 ; i < edit.row_length  ; i++ ){
+		memcpy( p , edit.ri[i].data , edit.ri[i].size) ; 
+		p = p + edit.ri[i].size ; 
+		*p = '\n' ; 
+		p++ ; 
+	}
+
+   return buf ; 
+}
+
+void saving(){
+	if (edit.filename == NULL){
+	return ; 
+	}
+	int len  ; 
+	char *buf = before_saving( &len ) ; 
+	int token  = open(edit.filename ,   O_RDWR | O_CREAT , 0644) ; 
+
+	if ( token != -1 ) { 
+	if ( ftruncate(token , len ) != -1 ) {   
+	if ( write( token , buf  , len ) == len ){ 
+		status_msg_input("%d copied to the file " , len) ; 
+		edit.changes = 0 ; 
+	close(token) ; 
+	free(buf) ; 
+	return  ; 
+	} 
+	} 
+	close(token) ; 
+	}
+	status_msg_input("Error file could'nt be saved " ) ; 
+	free(buf) ; 
+
+} 
 
 void dynamic_buffer_append( struct dynamic_buffer *temp  , const char *s , int len  ){ 
     char *need = realloc(temp->data , temp->size+len) ;
@@ -116,7 +170,6 @@ void render_input (row_input *row ) {
 			} 
 	} 
     } 
-	  k = k +1 ; 
 	  row->render[k] = '\0' ; 
 	row->render_size = k ; 
 	} 
@@ -141,10 +194,12 @@ void append_lines( char *line , size_t len) {
     edit.ri[edit.row_length].render_size = 0 ; 
     render_input(&edit.ri[edit.row_length]) ; 
     edit.row_length++   ; 
+	edit.changes++ ; 
 }  
 
 void text_in_input_buffer(char *file){ 
     FILE *fp  = fopen(file , "r") ;
+	edit.changes = 0 ; 
     edit.filename = strdup(file) ; 
     if (!fp) {									
       die("fopen") ; 
@@ -311,6 +366,32 @@ void cursor_change(int c ){
 		
 } 
 
+
+void free_row(row_input *row){
+	free(row->render) ; 
+	free(row->data) ; 
+}
+void del_row(int row ){
+	if ( row < 0 ||  row >= edit.row_length) {
+		return ; 
+	}
+	free_row(&edit.ri[row]) ; 
+	memmove(&edit.ri[row] , &edit.ri[row+1] , sizeof(edit) * (edit.row_length - row - 1  ) ) ; 
+	edit.row_length--;
+    edit.changes++;
+}
+
+void append_delete_lines(row_input * row  , char *s , size_t len ){
+	row->data  = realloc(row->data , len + row->size + 1 ) ; 
+	memcpy(&row->data[row->size] , s , len ) ; 
+	row->size += len  ; 
+	row->data[row->size] = '\0';
+	render_input(row);   
+	edit.changes++ ; 
+}
+
+
+
 void insert_char( row_input *line ,  int pos ,  int c ){ 
 	if ( pos < 0 || pos > line->size ){ 
 		pos  = line->size ; 
@@ -320,7 +401,20 @@ void insert_char( row_input *line ,  int pos ,  int c ){
 	line->size++ ; 
 	line->data[pos] = c ; 
 	render_input(line)  ; 
+	edit.changes++ ; 
 }
+
+void del_char( row_input *line  , int pos ){ 
+	if ( pos < 0 || pos > line->size ){ 
+		return  ; 
+	}
+    memmove( &line->data[pos ] , &line->data[pos+1 ] ,  line->size - pos  ) ; 
+	line->size-- ; 
+	render_input(line)  ; 
+	edit.changes++ ; 
+}
+
+
 
 void insert(int c ) {
 	if (edit.cursor_rows == edit.row_length ){ 
@@ -331,18 +425,48 @@ void insert(int c ) {
 	edit.cursor_cols++ ; 
 }
 
+void del() {
+	if (edit.cursor_rows == edit.row_length ){ 
+         append_lines("" , 0 ) ; 
+	}
+  	if (edit.cursor_cols == 0 && edit.cursor_rows == 0) {
+		return;
+	} 
+	int pos  = edit.cursor_cols ; 
+	row_input *row  = &edit.ri[edit.cursor_rows] ; 
+	if ( pos > 0 ){ 
+	del_char( &edit.ri[edit.cursor_rows] ,   pos-1  ) ; 
+	edit.cursor_cols-- ; 
+	} 
+	else { 
+		edit.cursor_cols = edit.ri[edit.cursor_rows - 1 ].size ; 
+		append_delete_lines(&edit.ri[edit.cursor_rows - 1 ] ,row->data , row ->size  ) ; 
+		del_row(edit.cursor_rows) ; 
+		edit.cursor_rows -= 1 ; 
+	}
+}
+
 
 
 
 void process_raw_key_press(){
+    static int  quit_times = quit ; 
 	int word  = raw_key_press() ; 
 	switch (word) {
 	  case ctrl('q') : 
+	    if ( edit.changes > 0 && quit_times > 0  ){
+			status_msg_input("The file is changed and not saved press %d times for still quitting without saving " , quit_times ) ; 
+			quit_times-- ; 
+			return  ; 
+		}
  		write(STDOUT_FILENO , "\x1b[2J" , 4 ) ; 
 	       write(STDOUT_FILENO , "\x1b[H" , 3 ) ; 
 	       exit(0)  ; 
               break ; 
 
+	  case ctrl('w'): 
+		saving() ; 
+		break ; 
 	  case Page_up : 
 	  case Page_down :
              if ( word == Page_up ) { 
@@ -372,6 +496,8 @@ void process_raw_key_press(){
 			cursor_change(Arrow_down) ; 
 			times-- ; 
 		}
+	}
+	break ; 
 	  case End_key : 
 		if ( edit.cursor_rows < edit.row_offset + edit.rows ) { 
 			edit.cursor_cols = edit.ri[edit.cursor_rows].size ; 
@@ -384,7 +510,10 @@ void process_raw_key_press(){
       case Backspace:
       case ctrl('h'):
       case delete:
-
+	      if (word == delete){
+			 cursor_change(Arrow_right) ; 
+		  }
+		  del() ; 
         break;
 
 	  case Arrow_up : 
@@ -399,10 +528,11 @@ void process_raw_key_press(){
 	  default:
          insert(word);
          break;
-	} 
+	}
+	quit_times = quit ;  
 
 } 
-}
+
 
 
 
@@ -423,7 +553,7 @@ return num ;
 void scroll_offset(){
 	edit.render_cols = 0 ; 
             
-	if ( edit.cursor_rows < edit.rows ) { 
+	if ( edit.cursor_rows < edit.rows && edit.cursor_rows < edit.row_length ) { 
       edit.render_cols = position_as_per_cursor( &edit.ri[edit.cursor_rows] )  ; 
 	} 
 		
@@ -441,13 +571,6 @@ void scroll_offset(){
 	} 
 } 
 
-void status_msg_input (const char* msg , ...  ){ 
-    va_list temp   ; 
-	va_start(temp  , msg) ; 
-	vsnprintf( edit.status_messege , sizeof(edit.status_messege ) , msg , temp) ; 
-	va_end(temp) ; 
-    edit.messege_time = time(NULL) ; 
-}
 
 
 void status_msg(struct dynamic_buffer *temp ) { 
@@ -481,10 +604,10 @@ void status_line(struct dynamic_buffer *temp ) {
 	  edit.filename = "NAME NOT DETECTED"  ;   
 	} 
 	int pos_len = 0 ; 
-	len = snprintf( file , sizeof(file)  , "%s - %d - %d " , edit.filename , edit.cursor_rows , edit.cursor_cols )  ; 
+	len = snprintf( file , sizeof(file)  , "%s - %d - %d - %s " , edit.filename  , edit.cursor_rows , edit.cursor_cols  , edit.changes ? "org" : "modified")  ; 
 	pos_len = snprintf( position , sizeof(position) , "%d-%d" , edit.cursor_rows + 1  , edit.row_length ) ; 
       if(len > edit.cols) { 
-		len = edit.cols ; 
+		len = edit.cols ; 	
 	} 
 	if ( len <= edit.cols ) { 
 	dynamic_buffer_append(temp, file , len) ; 
@@ -499,6 +622,9 @@ void status_line(struct dynamic_buffer *temp ) {
 	dynamic_buffer_append(temp, "\x1b[m" , 3) ; 		
 
 } 
+
+
+
 
 
 
@@ -614,6 +740,7 @@ void starter(){
 	edit.row_length = 0 ; 
       edit.ri = NULL ;  
       edit.row_offset = 0 ; 
+	  edit.changes = 0  ; 
 	edit.col_offset = 0 ; 
       if(get_window_size(&edit.rows , &edit.cols) == -1 ) { 
 		die("get_window_size") ; 
@@ -631,7 +758,7 @@ int main(int argc , char *argv[] ){
     if (argc >= 2 ){ 
 	 text_in_input_buffer(argv[1]) ; 
 	} 
-	status_msg_input( "ctrl + q for quitting ") ; 
+	status_msg_input( "ctrl + w for saving the file | ctrl + q for quitting ") ; 
     while(1) {
      screen_ready() ; 
     process_raw_key_press() ; 
