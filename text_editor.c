@@ -76,7 +76,7 @@ enum settings_keys {
 
 #define dynamic_buffer_starter { NULL , 0 } 
 
-char*saving_name(char *name ){
+char*saving_name(char *name , void (*func)(char *  , int  ) ){
 	size_t max  = 128  ; 
 		int len = 0 ; 
 	char * buf  = malloc(len) ; 
@@ -94,15 +94,21 @@ char*saving_name(char *name ){
 		}
 		else if ( c == '\r' ){
 			status_msg_input(" ") ; 
+			if ( func != NULL) {
+				func(buf , c ) ; 
+			}
 			return buf ; 
 		}
 		else if ( c == '\x1b'){
 			status_msg_input("The saving is cancel ") ; 
 			free(buf) ; 
+			if ( func != NULL) {
+				func(buf , c ) ; 
+			}
 			return NULL ; 
 		}
 		else { 
-			if ( !iscntrl(c) && c < 127 ){
+			if ( !iscntrl(c) && c < 128 ){
 				if ( len == max -1 ){ 
 					max  = max *2 ; 
 					buf  = realloc(buf ,max ) ; 
@@ -111,9 +117,96 @@ char*saving_name(char *name ){
 				len++ ; 
 				buf[len] = '\0' ; 
 			}
+			if ( func != NULL) {
+				func(buf , c ) ; 
+			}
 		}
 	}
 }
+
+
+
+
+int render_to_cols(row_input *row  , int pos ){
+	int curent_pos =  0 ; 
+	for ( int i = 0 ; i < row->size ; i++ ){
+		if ( row->data[i] == '\t'){
+			curent_pos = curent_pos + (tab_spaces  -1 ) - ( curent_pos % tab_spaces ); 
+		}
+		else{
+			curent_pos++ ; 
+		}
+		if ( curent_pos > pos ){ 
+			return i ; 
+		}
+	}
+	return curent_pos ; 
+}
+
+
+
+void finder_word(char *ques ,  int pos  ){
+  static int last_match = -1;
+  static int direction = 1;
+	  if (pos == '\r' || pos == '\x1b') {
+   		 last_match = -1 ; 
+		 direction = 1 ; 
+		 return ; 
+ 	 }
+	else if (pos == Arrow_up || pos == Arrow_left ){
+		direction = -1 ; 
+	}
+	else if (pos == Arrow_down || pos == Arrow_right  ){
+		direction = 1 ; 
+	}
+	if ( last_match == -1 ){
+		direction = 1 ; 
+	}
+	int current  = last_match ; 
+	for ( int i =  0 ; i < edit.row_length ; i++ ){
+		current  = current + direction  ; 
+		if ( current == -1 ){
+			current = edit.row_length-1 ; 
+		} 
+		if ( current  == edit.row_length){
+			current = 0 ;
+		}
+		row_input * row  = &edit.ri[current] ; 
+		char *found = strstr(row->render , ques) ; 
+		if ( found ){
+		last_match = current ; 
+		edit.cursor_rows = current ; 
+		edit.cursor_cols = render_to_cols( row , found - row->render ) ; 
+		if ( edit.cursor_rows  >  edit.row_offset + edit.rows ){
+		edit.row_offset = edit.row_length ; 
+		} 
+		break ; 
+		}
+}
+} 
+
+
+void finder(){
+	int prev_cols = edit.cursor_cols ; 
+	int prev_rows  = edit.cursor_rows; 
+	int prev_colset  = edit.col_offset; 
+	int prev_rowset  = edit.row_offset; 
+	char *ques = saving_name("escape = cancel and enter = continue , enter your question %s " , finder_word ) ; 
+	if ( ques != NULL ){ 
+		free(ques) ; 
+	}
+	else { 
+	edit.cursor_cols =  prev_cols  ; 
+	edit.cursor_rows =  prev_rows  ; 
+	edit.col_offset =  prev_colset  ; 
+	edit.row_offset =  prev_rowset ; 
+	}
+	
+
+}
+
+
+
 
 void status_msg_input (const char* msg , ...  ){ 
     va_list temp   ; 
@@ -144,7 +237,7 @@ char *before_saving(int *buflen){
 
 void saving(){
 	if (edit.filename == NULL){
-		edit.filename = saving_name("Enter file name %s") ; 
+		edit.filename = saving_name("Enter file name %s" , NULL) ; 
 	return ; 
 	}
 	int len  ; 
@@ -520,6 +613,9 @@ void process_raw_key_press(){
 		case '\r' : 
 		insert_new_lines() ; 	
 		break ; 
+		case ctrl('f') : 
+			finder() ; 
+			break ; 
 	  case ctrl('q') : 
 	    if ( edit.changes > 0 && quit_times > 0  ){
 			status_msg_input("The file is changed and not saved press %d times for still quitting without saving " , quit_times ) ; 
@@ -822,7 +918,7 @@ int main(int argc , char *argv[] ){
     if (argc >= 2 ){ 
 	 text_in_input_buffer(argv[1]) ; 
 	} 
-	status_msg_input( "ctrl + w for saving the file | ctrl + q for quitting ") ; 
+	status_msg_input( "ctrl + w for saving the file | ctrl + q for quitting | ctrl + f for finding words ") ; 
     while(1) {
      screen_ready() ; 
     process_raw_key_press() ; 
