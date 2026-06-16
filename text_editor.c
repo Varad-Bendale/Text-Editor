@@ -9,6 +9,7 @@
 #include<sys/types.h>
 #include<time.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <fcntl.h>
 #define _DEFAULT_SOURCE
 #define _BSD_SOURCE
@@ -23,6 +24,9 @@ typedef struct row_input{
 	char *data ; 
 	char *render  ; 
 	int render_size ; 
+	bool comment ; 
+	int comment_close_col ;
+	unsigned char *hl  ; 
 } row_input ; 
 
 void status_msg_input(const char* msg, ...);
@@ -44,6 +48,7 @@ struct editor_global {
 	char *filename ; 
 	char status_messege[80] ; 
 	time_t messege_time ; 
+	bool comment_cont  ; 
 } ;
 
 
@@ -70,11 +75,19 @@ enum settings_keys {
     delete 
 } ;
 
-
-
+enum hl{
+	hl_normal = 0 ,
+	hl_number , 
+	hl_search  , 
+	hl_comment , 
+	hl_syntax
+} ; 
 
 
 #define dynamic_buffer_starter { NULL , 0 } 
+
+
+
 
 char*saving_name(char *name , void (*func)(char *  , int  ) ){
 	size_t max  = 128  ; 
@@ -147,6 +160,13 @@ int render_to_cols(row_input *row  , int pos ){
 
 void finder_word(char *ques ,  int pos  ){
   static int last_match = -1;
+  static int  status ; 
+  static char *status_line  = NULL ; 
+  if ( status_line != NULL ){
+	memcpy(&edit.ri[status].hl , status_line , edit.ri[status].render_size   ) ; 
+	free(status_line) ; 
+	status_line = NULL ; 
+  } 
   static int direction = 1;
 	  if (pos == '\r' || pos == '\x1b') {
    		 last_match = -1 ; 
@@ -177,6 +197,10 @@ void finder_word(char *ques ,  int pos  ){
 		last_match = current ; 
 		edit.cursor_rows = current ; 
 		edit.cursor_cols = render_to_cols( row , found - row->render ) ; 
+		status = current ; 
+		status_line = malloc(row->render_size ) ; 
+		memcpy(status_line , row->hl , row->render_size   ) ; 	
+		memset(&row->hl[found - row->render ] , hl_search , strlen(ques)  )  ; 
 		if ( edit.cursor_rows  >  edit.row_offset + edit.rows ){
 		edit.row_offset = edit.row_length ; 
 		} 
@@ -275,6 +299,167 @@ void free_dynamic_buffer ( struct dynamic_buffer *temp){
       free(temp->data)  ; 
 }
 
+int seperator(int c ){
+	return isspace(c) || c == '\0' || strchr(",.()+-/*=~%<>[];", c) != NULL ; 
+}
+
+
+
+
+char *SQLITE_HL_keywords[] = {
+  "CREATE", "TABLE", "VIEW", "INDEX", "TRIGGER", "VIRTUAL", "DROP", "ALTER",
+"ADD", "COLUMN", "RENAME", "ATTACH", "DETACH", "DATABASE",
+"SELECT", "INSERT", "UPDATE", "DELETE", "REPLACE", "INTO", "VALUES", "SET",
+"FROM", "WHERE", "RETURNING", "UPSERT",
+"JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER", "CROSS", "NATURAL", "ON",
+"USING", "GROUP", "BY", "HAVING", "ORDER", "ASC", "DESC", "LIMIT", "OFFSET",
+"UNION", "INTERSECT", "EXCEPT", "ALL", "DISTINCT", "WITH", "RECURSIVE", "AS",
+"WINDOW", "OVER", "PARTITION", "ROWS", "RANGE", "GROUPS", "BETWEEN",
+"UNBOUNDED", "CURRENT", "ROW", "PRECEDING", "FOLLOWING",
+"PRIMARY", "KEY", "FOREIGN", "REFERENCES", "UNIQUE", "NOT", "NULL", "DEFAULT",
+"CHECK", "CONSTRAINT", "WITHOUT", "ROWID", "STRICT", "AUTOINCREMENT",
+"CONFLICT", "ROLLBACK", "ABORT", "FAIL", "IGNORE", "CASCADE", "RESTRICT",
+"NO", "ACTION", "DEFERRABLE", "DEFERRED", "INITIALLY", "IMMEDIATE",
+"BEGIN", "COMMIT", "END", "TRANSACTION", "SAVEPOINT", "RELEASE",
+"EXCLUSIVE", "CONCURRENT",
+"AND", "OR", "IN", "LIKE", "GLOB", "REGEXP", "MATCH", "IS", "ISNULL",
+"NOTNULL", "EXISTS", "CASE", "WHEN", "THEN", "ELSE", "CAST", "COLLATE",
+"RAISE", "INDEXED", "UNINDEXED",
+"PRAGMA", "VACUUM", "ANALYZE", "REINDEX", "EXPLAIN", "QUERY", "PLAN",
+"TEMP", "TEMPORARY", "IF", "EACH", "FOR", "OF", "NEW", "OLD",
+"BEFORE", "AFTER", "INSTEAD" , 
+"TRUE", "FALSE", "CURRENT_TIME", "CURRENT_DATE", "CURRENT_TIMESTAMP",
+"INTEGER", "INT", "REAL", "TEXT", "BLOB", "NUMERIC", "BOOLEAN",
+"DATE", "DATETIME", "FLOAT", "DOUBLE", "CHAR", "VARCHAR", "CLOB", NULL 
+};
+
+
+
+bool if_syntax( char* word ){
+	for ( int i = 0 ; SQLITE_HL_keywords[i] != NULL ; i++  ){
+	if (strcmp( word , SQLITE_HL_keywords[i]  ) == 0 ){
+		return true ; 
+	}  ; 
+	}	
+	return false ; 
+}
+
+
+
+void color(row_input * row){
+	row->hl = realloc(row->hl ,row->render_size ) ; 
+	memset(row->hl , hl_normal , row->render_size ) ; 
+	int prev_col = -1  ; 
+	bool check = true  ; 
+	bool comment = false ; 
+	int i = 0 ; 
+	int k = 0 ; 
+	char *buf  = NULL ;
+	int col = 0 ;  
+	while (i < row->render_size ){
+		if(i >= 1 ){ 
+			check = seperator(row->render[i-1]) ; 
+		}
+		else { 
+			check = true ; 
+		}
+		if ( i+1 < row->render_size && row->render[i] == '/' && row->render[i+1] == '/' ) {
+			comment = true  ; 
+		}
+
+
+		if ( edit.comment_cont == true   ){
+			row->hl[i] = hl_comment ; 
+			if ( i+1 < row->render_size && row->render[i] == '*' && row->render[i+1] == '/'){
+				row->hl[i+1] = hl_comment ; 
+				edit.comment_cont  = false  ; 
+				i = i + 2  ;
+			} 
+			else  {
+				i++ ;
+			} 
+				continue ; 
+		}
+
+		if ( i+1 < row->render_size && row->render[i] =='/' && row->render[i+1] == '*' && comment == false){
+			edit.comment_cont = true ; 
+			row->hl[i] = hl_comment;
+            row->hl[i+1] = hl_comment;
+            i += 2;
+            continue;
+		}
+
+
+
+		if ( comment == true ) { 
+				row->hl[i] = hl_comment ; 
+			i++ ; 
+			continue ; 
+		}
+
+
+		if ( isdigit(row->render[i] ) && (prev_col == hl_number || check == true ) || (row->render[i] == '.' && prev_col == hl_number )) {
+			row->hl[i] = hl_number ; 
+			prev_col = hl_number  ;
+			check = false ; 
+		}
+		else { 
+		if ( seperator(row->render[i]) ){
+			if ( buf != NULL ){ 
+				if ( if_syntax( buf )){ 
+					int mon = col ; 
+					while (mon < i ){
+						row->hl[mon] = hl_syntax ; 	
+						mon++ ; 	
+					}
+				}
+			free(buf) ; 
+			buf = NULL ; 
+			}
+
+			k = 0 ; 
+			col = i+1   ; 
+		}
+		else { 
+		buf = realloc(buf ,k+2 ) ; 
+		buf[k++] = row->render[i] ; 
+		buf[k] = '\0' ; 
+	
+		}
+		prev_col = hl_normal  ; 
+	}
+		i++ ; 
+}
+
+	if ( buf != NULL ){
+	if ( if_syntax( buf )){ 
+		int mon = col ; 
+		while (mon < i ){
+			row->hl[mon] = hl_syntax ; 	
+			mon++ ; 	
+		}
+	}
+	free(buf) ; 
+}
+}
+
+
+int decide_color(int hl){
+	switch( hl ){ 
+		case hl_comment:
+			return 31 ; 
+	  case hl_number: 
+	  	return 32 ; 
+		case hl_search :
+		  return  34 ; 
+	  case hl_normal: 
+	  	return 37 ; 
+	  case hl_syntax : 
+	     return 35 ; 
+	}
+	return 0 ; 
+}
+
 
 
 void render_input (row_input *row ) { 
@@ -306,6 +491,7 @@ void render_input (row_input *row ) {
     } 
 	  row->render[k] = '\0' ; 
 	row->render_size = k ; 
+	color(row) ; 
 	} 
 
 
@@ -333,6 +519,7 @@ void append_lines( char *line , int pos  , size_t len) {
     edit.ri[pos].data[len] = '\0' ; 
     edit.ri[pos].render = NULL ; 
     edit.ri[pos].render_size = 0 ; 
+	edit.ri[pos].hl = NULL ; 
     render_input(&edit.ri[pos]) ; 
     edit.row_length++   ; 
 	edit.changes++ ; 
@@ -527,6 +714,7 @@ void cursor_change(int c ){
 void free_row(row_input *row){
 	free(row->render) ; 
 	free(row->data) ; 
+	free(row->hl) ; 
 }
 void del_row(int row ){
 	if ( row < 0 ||  row >= edit.row_length) {
@@ -826,8 +1014,31 @@ void txt_print(struct dynamic_buffer *temp  ){
                  if (temp_len > edit.cols) { 
 				temp_len = edit.cols ; 
 			} 
-             	dynamic_buffer_append(temp, &edit.ri[correct_row].render[edit.col_offset] , temp_len ) ; 
+			char *row = &edit.ri[correct_row].render[edit.col_offset] ; 
+			unsigned char * hl = &edit.ri[correct_row].hl[edit.col_offset] ;
+			int prev_color = -1 ; 
+			for ( int j = 0 ; j < temp_len ; j++ ){ 
+				if (hl[j] == hl_normal) {
+					if ( prev_color != -1 ){ 
+					 dynamic_buffer_append(temp, "\x1b[39m" , 5  ) ; 
+					 prev_color = -1 ; 
+					} 
+             	     dynamic_buffer_append(temp, &row[j] , 1  ) ; 
+				}
+				else { 
+						int col = decide_color(hl[j]) ; 
+					if ( prev_color != col  ){
+						char *buf ; 
+						buf  = malloc(  temp_len) ; 
+						int len = snprintf(buf ,sizeof(buf) , "\x1b[%dm" , col ) ; 
+							dynamic_buffer_append(temp, buf , len  ) ; 
+						prev_color = col ; 
+				   }
+						dynamic_buffer_append(temp, &row[j] , 1  ) ;					
+				}				
 
+			} 
+				dynamic_buffer_append(temp, "\x1b[39m" , 5  ) ; 
           }
                dynamic_buffer_append(temp, "\x1b[K" , 3) ; 
               dynamic_buffer_append(temp, "\r\n", 2) ; 
@@ -901,7 +1112,9 @@ void starter(){
       edit.ri = NULL ;  
       edit.row_offset = 0 ; 
 	  edit.changes = 0  ; 
+	  edit.comment_cont = false ; 
 	edit.col_offset = 0 ; 
+
       if(get_window_size(&edit.rows , &edit.cols) == -1 ) { 
 		die("get_window_size") ; 
 	} 
@@ -910,6 +1123,8 @@ void starter(){
 	edit.rows  = edit.rows - 2  ; 
 	edit.filename = NULL ; 
 }
+
+
 
 
 int main(int argc , char *argv[] ){
