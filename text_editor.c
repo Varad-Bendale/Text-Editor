@@ -48,7 +48,7 @@ struct editor_global {
 	char *filename ; 
 	char status_messege[80] ; 
 	time_t messege_time ; 
-	bool comment_cont  ; 
+	int comment_start  ; 
 } ;
 
 
@@ -92,14 +92,14 @@ enum hl{
 char*saving_name(char *name , void (*func)(char *  , int  ) ){
 	size_t max  = 128  ; 
 		int len = 0 ; 
-	char * buf  = malloc(len) ; 
+	char * buf = malloc( max)  ; 
 
 	buf[0] = '\0' ; 
 	while(1) {
 		status_msg_input(name , buf) ; 
 		screen_ready() ; 
 		int c = raw_key_press() ; 
-		if ( c == delete | c == Backspace | c == ctrl('h')){
+		if ( c == delete || c == Backspace || c == ctrl('h')){
 			if ( len != 0 ){
 				len = len -1 ; 
 				buf[len] = '\0' ; 
@@ -114,10 +114,10 @@ char*saving_name(char *name , void (*func)(char *  , int  ) ){
 		}
 		else if ( c == '\x1b'){
 			status_msg_input("The saving is cancel ") ; 
-			free(buf) ; 
 			if ( func != NULL) {
 				func(buf , c ) ; 
 			}
+			free(buf) ; 
 			return NULL ; 
 		}
 		else { 
@@ -153,7 +153,7 @@ int render_to_cols(row_input *row  , int pos ){
 			return i ; 
 		}
 	}
-	return curent_pos ; 
+	return row->size  ; 
 }
 
 
@@ -163,7 +163,7 @@ void finder_word(char *ques ,  int pos  ){
   static int  status ; 
   static char *status_line  = NULL ; 
   if ( status_line != NULL ){
-	memcpy(&edit.ri[status].hl , status_line , edit.ri[status].render_size   ) ; 
+	memcpy(edit.ri[status].hl , status_line , edit.ri[status].render_size   ) ; 
 	free(status_line) ; 
 	status_line = NULL ; 
   } 
@@ -246,7 +246,7 @@ char *before_saving(int *buflen){
 	for ( int i = 0 ; i < edit.row_length ; i++ ){ 
 			len = len + edit.ri[i].size ; 
 	}
-	*buflen = len ; 
+	*buflen = len+edit.row_length ; 
 	char *buf  = malloc(len+edit.row_length)  ; 
 	char *p = buf ; 
 	for ( int i = 0 ; i < edit.row_length  ; i++ ){
@@ -352,6 +352,8 @@ void color(row_input * row){
 	int prev_col = -1  ; 
 	bool check = true  ; 
 	bool comment = false ; 
+	int current_row = (int)(row - edit.ri); 
+	bool comment_cont = (edit.comment_start != -1 && current_row > edit.comment_start) ; 
 	int i = 0 ; 
 	int k = 0 ; 
 	char *buf  = NULL ;
@@ -368,11 +370,12 @@ void color(row_input * row){
 		}
 
 
-		if ( edit.comment_cont == true   ){
+		if ( comment_cont == true   ){
 			row->hl[i] = hl_comment ; 
 			if ( i+1 < row->render_size && row->render[i] == '*' && row->render[i+1] == '/'){
 				row->hl[i+1] = hl_comment ; 
-				edit.comment_cont  = false  ; 
+				edit.comment_start = -1  ; 
+				comment_cont  = false  ; 
 				i = i + 2  ;
 			} 
 			else  {
@@ -382,7 +385,8 @@ void color(row_input * row){
 		}
 
 		if ( i+1 < row->render_size && row->render[i] =='/' && row->render[i+1] == '*' && comment == false){
-			edit.comment_cont = true ; 
+			edit.comment_start = current_row ; 
+			comment_cont = true ; 
 			row->hl[i] = hl_comment;
             row->hl[i+1] = hl_comment;
             i += 2;
@@ -658,30 +662,40 @@ int raw_key_press(){
 }
 
 
+int position_as_per_cursor( row_input *row ){ 
+	int num  = 0 ; 
+	 for ( int i = 0 ; i < edit.cursor_cols ; i++ ) { 
+		if ( row->data[i] == '\t' ) { 
+			num = num + (tab_spaces  -1 ) - ( num % tab_spaces ); 
+		} 
+		else { 
+			num = num + 1 ; 	
+		}
+	} 
+return num ; 
+} 
+
+
 
 void cursor_change(int c ){ 
+	int prev_col ; 
 	switch (c)  {
 	  case Arrow_up : 
 		if( edit.cursor_rows  != 0 ) { 
-			  if ( edit.cursor_cols >  edit.ri[edit.cursor_rows -1  ].size ) { 
-			     edit.cursor_cols = edit.ri[edit.cursor_rows - 1  ].size ; 			
-			} 
+			prev_col = position_as_per_cursor(&edit.ri[edit.cursor_rows])  ; 
 		   edit.cursor_rows -= 1  ; 
+			edit.cursor_cols = render_to_cols(&edit.ri[edit.cursor_rows] , prev_col ) ; 
 		} 
 		   break ; 
 
 	  case Arrow_down : 
 		
-		if (edit.cursor_rows < edit.row_length) {
-		  if ( edit.cursor_rows < edit.row_length -1 ) { 
-			if ( edit.cursor_cols >  edit.ri[edit.cursor_rows + 1  ].size ) { 
-			   edit.cursor_cols = edit.ri[edit.cursor_rows + 1 ].size ; 
-			} 
-			} 
-		  edit.cursor_rows += 1 ; 
+		if (edit.cursor_rows < edit.row_length - 1 ) {
+				prev_col = position_as_per_cursor(&edit.ri[edit.cursor_rows])  ; 
+						  edit.cursor_rows += 1 ; 
+				   edit.cursor_cols = render_to_cols(&edit.ri[edit.cursor_rows] , prev_col ) ; 
 		} 
 		   break ; 
-
 
 
 	 case Arrow_left : 
@@ -691,7 +705,9 @@ void cursor_change(int c ){
 			    edit.cursor_cols = edit.ri[edit.cursor_rows].size  ; 
 			 } 
 		} 
+		else { 
 		   edit.cursor_cols -= 1  ;  
+		}
 		   break ; 
 
 
@@ -702,10 +718,8 @@ void cursor_change(int c ){
 		else if ( edit.cursor_rows < edit.row_length  -1 ) { 
 		      edit.cursor_rows += 1 ; 
 			edit.cursor_cols = 0 ; 
-			break ; 
 			} 
-	
-   
+			break ; 
   }
 		
 } 
@@ -721,7 +735,7 @@ void del_row(int row ){
 		return ; 
 	}
 	free_row(&edit.ri[row]) ; 
-	memmove(&edit.ri[row] , &edit.ri[row+1] , sizeof(edit) * (edit.row_length - row - 1  ) ) ; 
+	memmove(&edit.ri[row] , &edit.ri[row+1] , sizeof(row_input) * (edit.row_length - row - 1  ) ) ; 
 	edit.row_length--;
     edit.changes++;
 }
@@ -838,17 +852,22 @@ void process_raw_key_press(){
 	    	} 
 		 
  		int times  = edit.rows ; 
+
+
 		while(times > 0 ) { 
-		  if ( word == Arrow_up) { 
+		  if ( word == Page_up) { 
 			cursor_change(Arrow_up) ; 
 			times-- ; 
 		}
-		if ( word == Arrow_down) { 
+		else if ( word == Page_down) { 
 			cursor_change(Arrow_down) ; 
 			times-- ; 
 		}
 	}
 	break ; 
+
+
+
 	  case End_key : 
 		if ( edit.cursor_rows < edit.row_offset + edit.rows ) { 
 			edit.cursor_cols = edit.ri[edit.cursor_rows].size ; 
@@ -856,7 +875,8 @@ void process_raw_key_press(){
 		  } 
 
 	  case Home_key : 
-		edit.cols = 0  ; 
+		edit.cursor_cols = 0  ; 
+		break ; 
 
       case Backspace:
       case ctrl('h'):
@@ -887,24 +907,13 @@ void process_raw_key_press(){
 
 
 
-int position_as_per_cursor( row_input *row ){ 
-	int num  = 0 ; 
-	 for ( int i = 0 ; i < edit.cursor_cols ; i++ ) { 
-		if ( row->data[i] == '\t' ) { 
-			num = num + (tab_spaces  -1 ) - ( num % tab_spaces ); 
-		} 
-			num = num + 1 ; 	
-	} 
-return num ; 
-} 
-
 
 
 
 void scroll_offset(){
 	edit.render_cols = 0 ; 
             
-	if ( edit.cursor_rows < edit.rows && edit.cursor_rows < edit.row_length ) { 
+	if ( edit.cursor_rows < edit.rows + edit.row_offset && edit.cursor_rows < edit.row_length ) { 
       edit.render_cols = position_as_per_cursor( &edit.ri[edit.cursor_rows] )  ; 
 	} 
 		
@@ -1030,7 +1039,7 @@ void txt_print(struct dynamic_buffer *temp  ){
 					if ( prev_color != col  ){
 						char *buf ; 
 						buf  = malloc(  temp_len) ; 
-						int len = snprintf(buf ,sizeof(buf) , "\x1b[%dm" , col ) ; 
+						int len = snprintf(buf ,temp_len , "\x1b[%dm" , col ) ; 
 							dynamic_buffer_append(temp, buf , len  ) ; 
 						prev_color = col ; 
 				   }
@@ -1112,7 +1121,7 @@ void starter(){
       edit.ri = NULL ;  
       edit.row_offset = 0 ; 
 	  edit.changes = 0  ; 
-	  edit.comment_cont = false ; 
+	  edit.comment_start = -1 ; 
 	edit.col_offset = 0 ; 
 
       if(get_window_size(&edit.rows , &edit.cols) == -1 ) { 
