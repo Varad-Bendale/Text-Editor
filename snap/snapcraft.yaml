@@ -6,11 +6,12 @@ description: |
   A terminal-based text editor built from scratch.
 
 grade: stable
-confinement: classic
+confinement: strict
 
 apps:
   palx:
     command: bin/palx
+    plugs: [home, removable-media]
 
 parts:
   palx-text-editor:
