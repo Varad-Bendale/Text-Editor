@@ -38,7 +38,7 @@ jobs:
         run: dpkg-deb --build pkg palx-text-editor.deb
 
       - name: Upload .deb artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: palx-text-editor-deb
           path: palx-text-editor.deb
