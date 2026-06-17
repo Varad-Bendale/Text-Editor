@@ -1,0 +1,44 @@
+name: Build .deb Package
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Compile
+        run: gcc -o palx_text_editor palx_text_editor.c
+
+      - name: Create package structure
+        run: |
+          mkdir -p pkg/DEBIAN
+          mkdir -p pkg/usr/bin
+          cp palx_text_editor pkg/usr/bin/
+          chmod 755 pkg/usr/bin/palx_text_editor
+
+      - name: Create control file
+        run: |
+          cat > pkg/DEBIAN/control << EOF
+          Package: palx-text-editor
+          Version: 0.0.1
+          Section: editors
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Varad Bendale <your@email.com>
+          Description: Palx Terminal Text Editor
+           A lightweight terminal text editor written in C.
+          EOF
+
+      - name: Build .deb
+        run: dpkg-deb --build pkg palx-text-editor.deb
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: palx-text-editor-deb
+          path: palx-text-editor.deb
